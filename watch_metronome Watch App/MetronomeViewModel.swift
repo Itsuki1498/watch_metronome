@@ -41,7 +41,7 @@ final class MetronomeViewModel {
         set { engine.bpm = newValue }
     }
 
-    /// Digital Crown操作用のBPM
+    /// Digital Crown操作用のBPM (Double)
     var displayBpm: Double {
         get { Double(engine.bpm) }
         set { 
@@ -80,7 +80,9 @@ final class MetronomeViewModel {
         set { 
             let index = Int(newValue)
             if index >= 0 && index < noteValueOptions.count {
-                noteValueIndex = index
+                if index != noteValueIndex {
+                    noteValueIndex = index
+                }
             }
         }
     }
@@ -105,13 +107,13 @@ final class MetronomeViewModel {
     
     let noteValueOptions: [NoteValue] = [
         NoteValue(name: "全", multiplier: 4.0),
-        NoteValue(name: "付.2", multiplier: 3.0),
+        NoteValue(name: "付2", multiplier: 3.0),
         NoteValue(name: "2", multiplier: 2.0),
-        NoteValue(name: "付.4", multiplier: 1.5),
+        NoteValue(name: "付4", multiplier: 1.5),
         NoteValue(name: "4", multiplier: 1.0),
-        NoteValue(name: "付.8", multiplier: 0.75),
+        NoteValue(name: "付8", multiplier: 0.75),
         NoteValue(name: "8", multiplier: 0.5),
-        NoteValue(name: "付.16", multiplier: 0.375),
+        NoteValue(name: "付16", multiplier: 0.375),
         NoteValue(name: "16", multiplier: 0.25),
         NoteValue(name: "32", multiplier: 0.125)
     ]
@@ -124,14 +126,13 @@ final class MetronomeViewModel {
     
     init() {
         setupEngine()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
             self.isSystemReady = true
         }
     }
     
     private func setupEngine() {
         engine.onTick = { [weak self] (beat: Int, intensity: BeatIntensity) in
-            // 振動の使い分け
             switch intensity {
             case .strong: self?.hapticManager.playStrong()
             case .medium: self?.hapticManager.playMedium()

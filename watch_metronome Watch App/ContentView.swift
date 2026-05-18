@@ -21,13 +21,12 @@ struct ContentView: View {
                 intensity: viewModel.currentIntensity,
                 isPlaying: viewModel.isPlaying
             )
-            .opacity(0.3) // 薄く背景におく
+            .opacity(0.4)
             .scaleEffect(1.1)
             
             if !viewModel.isSystemReady {
                 ProgressView()
             } else {
-                // 前面レイヤー: 操作UI
                 mainControlUI
             }
         }
@@ -40,79 +39,81 @@ struct ContentView: View {
         VStack(spacing: 0) {
             Spacer()
             
-            // BPM & 音価
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(viewModel.currentNoteName)
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundStyle(focusedField == .noteValue ? Color.accentColor : .secondary)
-                    .onTapGesture { focusedField = .noteValue }
-                    .focusable()
-                    .focused($focusedField, equals: .noteValue)
-                    .digitalCrownRotation($viewModel.displayNoteValueIndex, from: 0, through: Double(viewModel.noteValueOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
+            // 1. BPM & 音価設定
+            HStack(alignment: .center, spacing: 4) {
+                // 基準音価
+                settingItem(target: .noteValue, label: viewModel.currentNoteName)
+                    .digitalCrownRotation($viewModel.displayNoteValueIndex, from: 0, through: Double(viewModel.noteValueOptions.count - 1), by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
                 
                 Text("=")
-                    .font(.caption2)
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.secondary)
                 
-                Text("\(viewModel.bpm)")
-                    .font(.system(size: 46, weight: .bold, design: .rounded))
-                    .foregroundStyle(focusedField == .bpm ? Color.accentColor : .primary)
-                    .onTapGesture { focusedField = .bpm }
-                    .focusable()
-                    .focused($focusedField, equals: .bpm)
+                // BPM
+                settingItem(target: .bpm, label: "\(viewModel.bpm)", size: 48)
                     .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
             }
             
-            // 拍子 (分子 / 分母) & 簡易モード
+            // 2. 拍子設定 (分子 / 分母)
             HStack(spacing: 12) {
                 HStack(spacing: 4) {
-                    Text("\(viewModel.numerator)")
-                        .font(.system(size: 24, weight: .semibold, design: .rounded))
-                        .foregroundStyle(focusedField == .numerator ? Color.accentColor : .primary)
-                        .onTapGesture { focusedField = .numerator }
-                        .focusable()
-                        .focused($focusedField, equals: .numerator)
-                        .digitalCrownRotation($viewModel.displayNumerator, from: 0, through: 32, by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
+                    // 分子
+                    settingItem(target: .numerator, label: "\(viewModel.numerator)", size: 26)
+                        .digitalCrownRotation($viewModel.displayNumerator, from: 0, through: 32, by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
                     
                     Text("/")
-                        .font(.system(size: 18, weight: .light))
+                        .font(.system(size: 20, weight: .light))
                         .foregroundStyle(.secondary)
                     
-                    Text("\(viewModel.denominator)")
-                        .font(.system(size: 24, weight: .semibold, design: .rounded))
-                        .foregroundStyle(focusedField == .denominator ? Color.accentColor : .primary)
-                        .onTapGesture { focusedField = .denominator }
-                        .focusable()
-                        .focused($focusedField, equals: .denominator)
-                        .digitalCrownRotation($viewModel.displayDenominatorIndex, from: 0, through: Double(viewModel.denominatorOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
+                    // 分母
+                    settingItem(target: .denominator, label: "\(viewModel.denominator)", size: 26)
+                        .digitalCrownRotation($viewModel.displayDenominatorIndex, from: 0, through: Double(viewModel.denominatorOptions.count - 1), by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
                 
-                // 弱拍ミュートボタン
+                // 簡易モード切替
                 Button {
                     viewModel.isSimplifiedMode.toggle()
                 } label: {
                     Image(systemName: viewModel.isSimplifiedMode ? "eye.slash.fill" : "eye.fill")
-                        .font(.system(size: 12))
+                        .font(.system(size: 14))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(viewModel.isSimplifiedMode ? Color.orange : .secondary)
+                .padding(.leading, 4)
             }
             .padding(.top, 4)
             
             Spacer()
             
-            // 再生ボタン
+            // 3. 再生ボタン
             Button {
                 viewModel.togglePlayback()
             } label: {
                 Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
                     .font(.title2)
             }
-            .frame(height: 38)
+            .frame(height: 40)
             .tint(viewModel.isPlaying ? .red : .green)
             .buttonStyle(.borderedProminent)
         }
         .padding(.horizontal)
+    }
+    
+    // 設定項目の共通コンポーネント
+    private func settingItem(target: MetronomeViewModel.EditTarget, label: String, size: CGFloat = 20) -> some View {
+        Text(label)
+            .font(.system(size: size, weight: .bold, design: .rounded))
+            .foregroundStyle(focusedField == target ? Color.accentColor : .primary)
+            .padding(.horizontal, 6)
+            .background(focusedField == target ? Color.accentColor.opacity(0.2) : Color.clear)
+            .cornerRadius(6)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                focusedField = target
+                WKInterfaceDevice.current().play(.click)
+            }
+            .focusable()
+            .focused($focusedField, equals: target)
     }
 }
 
@@ -126,7 +127,6 @@ struct PieIndicatorView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                // ベースのガイド円
                 Circle()
                     .stroke(Color.white.opacity(0.1), lineWidth: 2)
                 
@@ -145,13 +145,11 @@ struct PieIndicatorView: View {
                         }
                         .fill(pieceColor(for: i + 1))
                         .opacity(pieceOpacity(for: i + 1))
-                        .animation(.easeInOut(duration: 0.1), value: currentBeat)
                     }
                 } else {
                     Circle()
                         .fill(pieceColor(for: 1))
                         .opacity(isPlaying ? 0.3 : 0.05)
-                        .scaleEffect(isPlaying ? 1.02 : 1.0)
                 }
             }
         }
@@ -168,7 +166,7 @@ struct PieIndicatorView: View {
     }
     
     private func pieceOpacity(for beat: Int) -> Double {
-        if beat == currentBeat { return 0.6 }
+        if beat == currentBeat { return 0.7 }
         return 0.1
     }
 }
