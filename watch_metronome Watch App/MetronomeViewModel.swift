@@ -17,16 +17,16 @@ final class MetronomeViewModel {
     private let engine = MetronomeEngine()
     private let hapticManager = HapticManager()
     
-    /// 現在のBPM
-    var bpm: Double {
+    /// 現在のBPM (Int型)
+    var bpm: Int {
         get { engine.bpm }
         set { engine.bpm = newValue }
     }
 
-    /// Digital Crown操作用のBPM
+    /// Digital Crown操作用のBPM (UI側はDoubleで受け取るため)
     var displayBpm: Double {
-        get { engine.bpm }
-        set { engine.bpm = Double(Int(newValue)) }
+        get { Double(engine.bpm) }
+        set { engine.bpm = Int(newValue) }
     }
     
     /// 動作中かどうか

@@ -14,25 +14,28 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 10) {
             // 拍のインジケーター（強拍と弱拍で光り方を変える）
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 ForEach(1...max(1, viewModel.numerator), id: \.self) { i in
                     let isCurrent = i == viewModel.currentBeat
-                    let isStrong = i == 1 // 1拍目を強拍として表示
+                    let isFirstBeat = i == 1
                     
                     Circle()
                         .fill(isCurrent ? (viewModel.isCurrentBeatStrong ? Color.orange : Color.accentColor) : Color.gray.opacity(0.3))
-                        .frame(width: isCurrent ? (viewModel.isCurrentBeatStrong ? 12 : 10) : 8, 
-                               height: isCurrent ? (viewModel.isCurrentBeatStrong ? 12 : 10) : 8)
-                        .animation(.spring(duration: 0.1), value: viewModel.currentBeat)
+                        .frame(width: isCurrent ? (viewModel.isCurrentBeatStrong ? 14 : 10) : 8, 
+                               height: isCurrent ? (viewModel.isCurrentBeatStrong ? 14 : 10) : 8)
+                        // 強拍時は少し光を強くする（擬似的な発光表現）
+                        .shadow(color: isCurrent && viewModel.isCurrentBeatStrong ? .orange : .clear, radius: 4)
+                        .scaleEffect(isCurrent ? 1.2 : 1.0)
+                        .animation(.spring(response: 0.2, dampingFraction: 0.5), value: viewModel.currentBeat)
                 }
             }
             
             // BPM表示
             VStack {
-                Text("\(Int(viewModel.displayBpm))")
-                    .font(.system(size: 50, weight: .bold, design: .rounded))
+                Text("\(viewModel.bpm)")
+                    .font(.system(size: 54, weight: .bold, design: .rounded))
                 Text("BPM")
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
             .contentShape(Rectangle())
