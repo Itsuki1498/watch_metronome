@@ -91,17 +91,13 @@ final class MetronomeViewModel {
     var currentBeat: Int = 1
     var currentIntensity: BeatIntensity = .weak
     
-    /// 針の描画のためのプロパティ
+    /// インジケーター描画のためのプロパティ
     var numerator: Int { engine.numerator }
     var denominator: Int { engine.denominator }
+    var ticksPerMediumBeat: Int { engine.ticksPerMediumBeat }
     
-    /// 最後に拍が鳴った時刻と、次の拍までの予定間隔（秒）を公開
     var lastTickTime: DispatchTime { engine.lastTickTime }
-    var tickInterval: Double {
-        let baseNoteValue = 4.0 / Double(engine.denominator)
-        let internalBpm = Double(engine.bpm) * (engine.referenceNoteMultiplier / baseNoteValue)
-        return 60.0 / internalBpm
-    }
+    var tickInterval: Double { engine.internalInterval }
     
     let denominatorOptions = [2, 4, 8, 16, 32]
     

@@ -43,8 +43,6 @@ final class MetronomeEngine {
     
     private(set) var isPlaying: Bool = false
     private var tickCount: Int = 0
-    
-    /// 最後に拍が鳴った時刻（外部から針の描画のために参照可能にする）
     private(set) var lastTickTime: DispatchTime = .now()
     
     private var timer: DispatchSourceTimer?
@@ -53,10 +51,10 @@ final class MetronomeEngine {
     
     var onTick: ((_ beat: Int, _ intensity: BeatIntensity) -> Void)?
     
-    // MARK: - Logic Constants
+    // MARK: - Logic Constants (UI側で参照可能にする)
     
-    private var internalInterval: Double = 0.5
-    private var ticksPerMediumBeat: Int = 1
+    private(set) var internalInterval: Double = 0.5
+    private(set) var ticksPerMediumBeat: Int = 1
 
     private func updateConstants() {
         let unitNoteValue = 4.0 / Double(denominator)
@@ -119,7 +117,7 @@ final class MetronomeEngine {
         
         tickCount += 1
         let currentTick = tickCount
-        lastTickTime = .now() // 発火時刻を更新
+        lastTickTime = .now()
         
         let currentNumerator = numerator
         let currentTicksPerMedium = ticksPerMediumBeat
