@@ -6,8 +6,10 @@
 //
 
 import Foundation
+import Observation
 
 /// メトロノームのリズム生成を担うエンジン
+@Observable
 final class MetronomeEngine {
     
     // MARK: - Properties (設定値)

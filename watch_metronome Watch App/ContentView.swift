@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var viewModel = MetronomeViewModel()
+    @FocusState private var isCrownFocused: Bool
     
     var body: some View {
         VStack(spacing: 10) {
@@ -31,7 +32,8 @@ struct ContentView: View {
             }
             .contentShape(Rectangle())
             .focusable()
-            .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 1, sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
+            .focused($isCrownFocused)
+            .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
             
             // 再生/停止ボタン
             Button {
@@ -44,6 +46,10 @@ struct ContentView: View {
             .buttonStyle(.borderedProminent)
         }
         .padding()
+        .onAppear {
+            // 画面が表示された時に自動でフォーカスを当てる
+            isCrownFocused = true
+        }
     }
 }
 
