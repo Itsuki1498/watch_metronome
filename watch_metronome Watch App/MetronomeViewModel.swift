@@ -23,12 +23,16 @@ final class MetronomeViewModel {
     private let engine = MetronomeEngine()
     private let hapticManager = HapticManager()
     
-    /// システムの準備ができているか
     var isSystemReady: Bool = false
     
-    /// 編集対象の項目
     enum EditTarget: Hashable {
         case bpm, numerator, denominator, noteValue
+    }
+    
+    /// 弱拍を消す（簡易表示）モード
+    var isSimplifiedMode: Bool {
+        get { engine.isSimplifiedMode }
+        set { engine.isSimplifiedMode = newValue }
     }
     
     /// 現在のBPM
@@ -64,7 +68,6 @@ final class MetronomeViewModel {
                 let newDenom = denominatorOptions[index]
                 if newDenom != engine.denominator {
                     engine.denominator = newDenom
-                    // 分母を変えたら、デフォルトの音価もそれに合わせる
                     syncNoteValueToDenominator()
                 }
             }
@@ -88,12 +91,12 @@ final class MetronomeViewModel {
         }
     }
     
-    /// 動作中かどうか
+    /// 動作状態
     var isPlaying: Bool { engine.isPlaying }
     
-    /// 現在の拍数
+    /// 現在の拍数と強さ
     var currentBeat: Int = 1
-    var isCurrentBeatStrong: Bool = false
+    var currentIntensity: BeatIntensity = .weak
     
     /// 各種設定値
     var numerator: Int { engine.numerator }
@@ -127,19 +130,22 @@ final class MetronomeViewModel {
     }
     
     private func setupEngine() {
-        engine.onTick = { [weak self] (beat: Int, isStrong: Bool) in
-            if isStrong { self?.hapticManager.playStrong() }
-            else { self?.hapticManager.playWeak() }
+        engine.onTick = { [weak self] (beat: Int, intensity: BeatIntensity) in
+            // 振動の使い分け
+            switch intensity {
+            case .strong: self?.hapticManager.playStrong()
+            case .medium: self?.hapticManager.playMedium()
+            case .weak:   self?.hapticManager.playWeak()
+            }
             
             DispatchQueue.main.async {
                 self?.currentBeat = beat
-                self?.isCurrentBeatStrong = isStrong
+                self?.currentIntensity = intensity
             }
         }
     }
     
     private func syncNoteValueToDenominator() {
-        // 分母 (2, 4, 8...) に対応する音価名を探して設定
         let targetName = "\(engine.denominator)"
         if let index = noteValueOptions.firstIndex(where: { $0.name == targetName }) {
             noteValueIndex = index

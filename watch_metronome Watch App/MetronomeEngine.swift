@@ -9,6 +9,13 @@ import Foundation
 import Observation
 import WatchKit
 
+/// 拍の強さ
+enum BeatIntensity {
+    case strong // 強拍 (1拍目)
+    case medium // 中拍 (基準音符の節目)
+    case weak   // 弱拍 (最小単位の刻み)
+}
+
 /// メトロノームのリズム生成を担うエンジン
 @Observable
 final class MetronomeEngine {
@@ -17,30 +24,27 @@ final class MetronomeEngine {
     
     /// テンポ (基準音符が1分間に刻まれる回数)
     var bpm: Int = 120 {
-        didSet {
-            if bpm < 40 { bpm = 40 }
-            if bpm > 400 { bpm = 400 }
-            if isPlaying { updateTimerSchedule(isRestart: true) }
-        }
+        didSet { updateConstants() }
     }
     
-    /// 拍子（分子）
+    /// 拍子（分子）: 最小単位の音符が1小節にいくつあるか
     var numerator: Int = 4 {
-        didSet {
-            if numerator < 0 { numerator = 0 }
-            if numerator > 32 { numerator = 32 }
-        }
+        didSet { updateConstants() }
     }
     
-    /// 拍子（分母）
-    var denominator: Int = 4
+    /// 拍子（分母）: 1小節を何分割するか（最小単位の音符）
+    var denominator: Int = 4 {
+        didSet { updateConstants() }
+    }
     
-    /// BPMの基準となる音価（四分音符を 1.0 とする）
-    /// 例: 八分音符なら 0.5, 二分音符なら 2.0
+    /// BPMの基準となる音価倍率 (四分音符 = 1.0)
     var referenceNoteMultiplier: Double = 1.0 {
-        didSet {
-            if isPlaying { updateTimerSchedule(isRestart: true) }
-        }
+        didSet { updateConstants() }
+    }
+    
+    /// 弱拍を消して、中拍を弱拍として扱うモード
+    var isSimplifiedMode: Bool = false {
+        didSet { if isPlaying { updateTimerSchedule(isRestart: true) } }
     }
     
     /// 動作状態
@@ -55,72 +59,78 @@ final class MetronomeEngine {
     /// 内部的なタイマー
     private var timer: DispatchSourceTimer?
     private let queue = DispatchQueue(label: "com.watchmetronome.engine", qos: .userInteractive)
-    
-    /// スレッド安全性のためのロック
     private let lock = NSRecursiveLock()
     
-    /// 1拍ごとの通知用クロージャ
-    var onTick: ((_ beat: Int, _ isStrong: Bool) -> Void)?
+    /// 拍ごとの通知用クロージャ
+    var onTick: ((_ beat: Int, _ intensity: BeatIntensity) -> Void)?
+    
+    // MARK: - Internal Logic Constants
+    
+    /// 実際にタイマーが刻む1拍の間隔（秒）
+    private var internalInterval: Double = 0.5
+    
+    /// 中拍が発生する間隔（最小単位何個分か）
+    private var ticksPerMediumBeat: Int = 1
+
+    private func updateConstants() {
+        // 1. 内部的な刻み（最小単位 = denominator）のBPMを計算
+        // 理論: 内部BPM = 表示BPM * (基準音価倍率 / (4.0 / 分母))
+        // 例: 付点4分(1.5) = 120, 12/8(分母8) の時
+        // 内部BPM = 120 * (1.5 / (4.0/8)) = 120 * (1.5 / 0.5) = 360
+        let baseNoteValue = 4.0 / Double(denominator)
+        let internalBpm = Double(bpm) * (referenceNoteMultiplier / baseNoteValue)
+        
+        // 2. 中拍の間隔を計算
+        // 基準音符の中に最小単位がいくつ入るか
+        // 例: 基準が付点4分、分母が8の時 -> 1.5 / 0.5 = 3個
+        ticksPerMediumBeat = max(1, Int(round(referenceNoteMultiplier / baseNoteValue)))
+        
+        // 3. タイマー間隔の決定
+        if isSimplifiedMode {
+            // 簡易モードなら中拍の間隔でタイマーを回す
+            internalInterval = 60.0 / (internalBpm / Double(ticksPerMediumBeat))
+        } else {
+            // 通常モードなら最小単位で回す
+            internalInterval = 60.0 / internalBpm
+        }
+        
+        if isPlaying { updateTimerSchedule(isRestart: true) }
+    }
     
     // MARK: - Methods (機能)
     
-    /// メトロノームを開始します
     func start() {
         lock.lock()
         defer { lock.unlock() }
-        
         guard !isPlaying else { return }
         
         isPlaying = true
-        tickCount = 0 // 最初のtickで 1 になるように設定
-        
-        if timer == nil {
-            timer = DispatchSource.makeTimerSource(queue: queue)
-            timer?.setEventHandler { [weak self] in
-                self?.tick()
-            }
-            timer?.resume()
-        }
-        
-        // --- 根本解決：1拍目もタイマーに任せる ---
-        // start()内での直接発火をやめ、100ms後にタイマーの「初回」が来るようにします。
-        // これで1拍目と2拍目の動作環境が完全に同一になり、間隔が狂わなくなります。
-        lastTickTime = .now() // 基準を今にする
+        tickCount = 0
+        lastTickTime = .now()
+        updateConstants()
         updateTimerSchedule(isRestart: false)
     }
     
-    /// メトロノームを停止します
     func stop() {
         lock.lock()
         defer { lock.unlock() }
-        
         isPlaying = false
         timer?.cancel()
         timer = nil
     }
     
-    /// タイマーのスケジュールを設定・更新
     private func updateTimerSchedule(isRestart: Bool) {
-        // インターバル計算: (60秒 / BPM) 
-        // ※ 基準音価に関わらず、BPMは「その音符が1分間に何回鳴るか」を指します
-        let interval = 60.0 / Double(bpm)
-        
         let deadline: DispatchTime
         if isRestart {
-            // 演奏中の変更：最後の拍から正確な間隔後
-            let nextTime = lastTickTime + interval
+            let nextTime = lastTickTime + internalInterval
             deadline = nextTime < .now() ? .now() : nextTime
         } else {
-            // 開始時：100ms後に最初の1拍目を予約
             deadline = .now() + .milliseconds(100)
-            // 最初の拍が100ms後なので、lastTickTimeをそこに合わせて補正
-            lastTickTime = deadline - interval
+            lastTickTime = deadline - internalInterval
         }
-        
-        timer?.schedule(deadline: deadline, repeating: interval, leeway: .nanoseconds(0))
+        timer?.schedule(deadline: deadline, repeating: internalInterval, leeway: .nanoseconds(0))
     }
     
-    /// タイマーから呼ばれる処理
     private func tick() {
         lock.lock()
         guard isPlaying else {
@@ -130,16 +140,25 @@ final class MetronomeEngine {
         
         tickCount += 1
         let currentTick = tickCount
-        lastTickTime = .now() // 実際の正確な発火時刻を記録
+        lastTickTime = .now()
         
         let currentNumerator = numerator
+        let step = isSimplifiedMode ? ticksPerMediumBeat : 1
         lock.unlock()
         
-        // 判定
-        let isStrong = currentNumerator == 1 || (currentNumerator > 1 && (currentTick - 1) % currentNumerator == 0)
-        let displayBeat = currentNumerator == 0 ? 1 : ((currentTick - 1) % currentNumerator) + 1
+        // 論理的な拍位置
+        let logicalBeat = ((currentTick - 1) * step) % max(1, currentNumerator) + 1
         
-        // 通知
-        onTick?(displayBeat, isStrong)
+        // 強弱判定
+        let intensity: BeatIntensity
+        if logicalBeat == 1 {
+            intensity = .strong
+        } else if (logicalBeat - 1) % ticksPerMediumBeat == 0 {
+            intensity = .medium
+        } else {
+            intensity = .weak
+        }
+        
+        onTick?(logicalBeat, intensity)
     }
 }
