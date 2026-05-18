@@ -11,7 +11,7 @@ import Observation
 /// 音価の定義
 struct NoteValue: Hashable {
     let name: String
-    let multiplier: Double // 四分音符を 1.0 とした倍率
+    let multiplier: Double
 }
 
 /// メトロノームの画面状態と操作を管理するViewModel
@@ -29,19 +29,16 @@ final class MetronomeViewModel {
         case bpm, numerator, denominator, noteValue
     }
     
-    /// 弱拍を消す（簡易表示）モード
     var isSimplifiedMode: Bool {
         get { engine.isSimplifiedMode }
         set { engine.isSimplifiedMode = newValue }
     }
     
-    /// 現在のBPM
     var bpm: Int {
         get { engine.bpm }
         set { engine.bpm = newValue }
     }
 
-    /// Digital Crown操作用のBPM (Double)
     var displayBpm: Double {
         get { Double(engine.bpm) }
         set { 
@@ -50,7 +47,6 @@ final class MetronomeViewModel {
         }
     }
     
-    /// Digital Crown操作用の分子
     var displayNumerator: Double {
         get { Double(engine.numerator) }
         set { 
@@ -59,7 +55,6 @@ final class MetronomeViewModel {
         }
     }
     
-    /// Digital Crown操作用の分母インデックス
     var displayDenominatorIndex: Double {
         get { Double(denominatorOptions.firstIndex(of: engine.denominator) ?? 1) }
         set { 
@@ -74,7 +69,6 @@ final class MetronomeViewModel {
         }
     }
     
-    /// Digital Crown操作用の音価インデックス
     var displayNoteValueIndex: Double {
         get { Double(noteValueIndex) }
         set { 
@@ -87,20 +81,16 @@ final class MetronomeViewModel {
         }
     }
     
-    var noteValueIndex: Int = 4 { // デフォルトは四分音符
+    var noteValueIndex: Int = 4 {
         didSet {
             engine.referenceNoteMultiplier = noteValueOptions[noteValueIndex].multiplier
         }
     }
     
-    /// 動作状態
     var isPlaying: Bool { engine.isPlaying }
-    
-    /// 現在の拍数と強さ
     var currentBeat: Int = 1
     var currentIntensity: BeatIntensity = .weak
     
-    /// 各種設定値
     var numerator: Int { engine.numerator }
     var denominator: Int { engine.denominator }
     let denominatorOptions = [2, 4, 8, 16, 32]
@@ -133,16 +123,14 @@ final class MetronomeViewModel {
     
     private func setupEngine() {
         engine.onTick = { [weak self] (beat: Int, intensity: BeatIntensity) in
-            // 振動の使い分け
+            // 振動の使い分け（一生君の指示通り、格下げせず弱拍のみ無音にする）
             if self?.isSimplifiedMode == true {
-                // 簡易モード時
                 switch intensity {
-                case .strong:  self?.hapticManager.playStrong()
-                case .medium:  self?.hapticManager.playWeak() // 中拍を弱拍の振動にする
-                default:       break // 弱拍(weak)や無音(silence)は振動させない
+                case .strong: self?.hapticManager.playStrong()
+                case .medium: self?.hapticManager.playMedium() // 格下げせずそのまま
+                default: break // 弱拍(weak)や無音(silence)は振動させない
                 }
             } else {
-                // 通常モード時
                 switch intensity {
                 case .strong:  self?.hapticManager.playStrong()
                 case .medium:  self?.hapticManager.playMedium()

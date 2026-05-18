@@ -14,18 +14,18 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
-            // 背景レイヤー: 円グラフ型インジケーター
-            PieIndicatorView(
+            // モダンな背景レイヤー: グラデーションとブラーを効かせた円環
+            ModernPieIndicatorView(
                 numerator: viewModel.numerator,
                 currentBeat: viewModel.currentBeat,
                 intensity: viewModel.currentIntensity,
                 isPlaying: viewModel.isPlaying
             )
-            .opacity(0.4)
-            .scaleEffect(1.1)
+            .scaleEffect(1.2)
             
             if !viewModel.isSystemReady {
                 ProgressView()
+                    .tint(.orange)
             } else {
                 mainControlUI
             }
@@ -39,74 +39,79 @@ struct ContentView: View {
         VStack(spacing: 0) {
             Spacer()
             
-            // 1. BPM & 音価設定
+            // 1. BPM & 音価設定 (フローティング感のあるデザイン)
             HStack(alignment: .center, spacing: 4) {
-                // 基準音価
                 settingItem(target: .noteValue, label: viewModel.currentNoteName)
-                    .digitalCrownRotation($viewModel.displayNoteValueIndex, from: 0, through: Double(viewModel.noteValueOptions.count - 1), by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
+                    .digitalCrownRotation($viewModel.displayNoteValueIndex, from: 0, through: Double(viewModel.noteValueOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                 
                 Text("=")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondary.opacity(0.7))
                 
-                // BPM
-                settingItem(target: .bpm, label: "\(viewModel.bpm)", size: 48)
+                settingItem(target: .bpm, label: "\(viewModel.bpm)", size: 50)
                     .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
             }
+            .padding(.bottom, 4)
             
             // 2. 拍子設定 (分子 / 分母)
-            HStack(spacing: 12) {
+            HStack(spacing: 15) {
                 HStack(spacing: 4) {
-                    // 分子
-                    settingItem(target: .numerator, label: "\(viewModel.numerator)", size: 26)
+                    settingItem(target: .numerator, label: "\(viewModel.numerator)", size: 24)
                         .digitalCrownRotation($viewModel.displayNumerator, from: 0, through: 32, by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                     
                     Text("/")
-                        .font(.system(size: 20, weight: .light))
+                        .font(.system(size: 18, weight: .light))
                         .foregroundStyle(.secondary)
                     
-                    // 分母
-                    settingItem(target: .denominator, label: "\(viewModel.denominator)", size: 26)
+                    settingItem(target: .denominator, label: "\(viewModel.denominator)", size: 24)
                         .digitalCrownRotation($viewModel.displayDenominatorIndex, from: 0, through: Double(viewModel.denominatorOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
                 
-                // 簡易モード切替
+                // ネオン風の簡易モードボタン
                 Button {
                     viewModel.isSimplifiedMode.toggle()
                 } label: {
                     Image(systemName: viewModel.isSimplifiedMode ? "eye.slash.fill" : "eye.fill")
-                        .font(.system(size: 14))
+                        .font(.system(size: 16))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(viewModel.isSimplifiedMode ? Color.orange : .secondary)
-                .padding(.leading, 4)
+                .foregroundStyle(viewModel.isSimplifiedMode ? Color.orange : Color.blue.opacity(0.8))
+                .shadow(color: viewModel.isSimplifiedMode ? .orange.opacity(0.5) : .clear, radius: 5)
             }
-            .padding(.top, 4)
             
             Spacer()
             
-            // 3. 再生ボタン
+            // 3. 再生ボタン (シンプルかつモダン)
             Button {
                 viewModel.togglePlayback()
             } label: {
                 Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
                     .font(.title2)
             }
-            .frame(height: 40)
-            .tint(viewModel.isPlaying ? .red : .green)
+            .frame(height: 42)
+            .tint(viewModel.isPlaying ? .red.opacity(0.8) : .green.opacity(0.8))
             .buttonStyle(.borderedProminent)
+            .clipShape(Capsule())
         }
         .padding(.horizontal)
     }
     
-    // 設定項目の共通コンポーネント
     private func settingItem(target: MetronomeViewModel.EditTarget, label: String, size: CGFloat = 20) -> some View {
         Text(label)
-            .font(.system(size: size, weight: .bold, design: .rounded))
-            .foregroundStyle(focusedField == target ? Color.accentColor : .primary)
-            .padding(.horizontal, 6)
-            .background(focusedField == target ? Color.accentColor.opacity(0.2) : Color.clear)
-            .cornerRadius(6)
+            .font(.system(size: size, weight: .black, design: .rounded))
+            .foregroundStyle(focusedField == target ? Color.white : Color.primary.opacity(0.9))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .background(
+                ZStack {
+                    if focusedField == target {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.accentColor.opacity(0.3))
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.accentColor, lineWidth: 2)
+                    }
+                }
+            )
             .contentShape(Rectangle())
             .onTapGesture {
                 focusedField = target
@@ -114,11 +119,12 @@ struct ContentView: View {
             }
             .focusable()
             .focused($focusedField, equals: target)
+            .animation(.easeInOut(duration: 0.2), value: focusedField)
     }
 }
 
-/// 背景用：円グラフ型インジケーター
-struct PieIndicatorView: View {
+/// モダンな円環型インジケーター
+struct ModernPieIndicatorView: View {
     let numerator: Int
     let currentBeat: Int
     let intensity: BeatIntensity
@@ -126,49 +132,73 @@ struct PieIndicatorView: View {
     
     var body: some View {
         GeometryReader { geo in
+            let size = min(geo.size.width, geo.size.height)
+            let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
+            
             ZStack {
+                // 背景のベースリング
                 Circle()
-                    .stroke(Color.white.opacity(0.1), lineWidth: 2)
+                    .stroke(
+                        AngularGradient(
+                            gradient: Gradient(colors: [.blue.opacity(0.1), .purple.opacity(0.1), .blue.opacity(0.1)]),
+                            center: .center
+                        ),
+                        lineWidth: 6
+                    )
                 
                 if numerator > 1 {
                     ForEach(0..<numerator, id: \.self) { i in
                         let startAngle = Double(i) * (360.0 / Double(numerator)) - 90
                         let endAngle = Double(i + 1) * (360.0 / Double(numerator)) - 90
+                        let isCurrent = (i + 1) == currentBeat
                         
+                        // 軌跡のセグメント
                         Path { path in
-                            let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
-                            path.move(to: center)
-                            path.addArc(center: center, radius: geo.size.width / 2,
+                            path.addArc(center: center, radius: size / 2,
                                         startAngle: .degrees(startAngle + 1),
                                         endAngle: .degrees(endAngle - 1),
                                         clockwise: false)
                         }
-                        .fill(pieceColor(for: i + 1))
-                        .opacity(pieceOpacity(for: i + 1))
+                        .stroke(
+                            isCurrent ? currentGradient : AnyShapeStyle(Color.white.opacity(0.05)),
+                            style: StrokeStyle(lineWidth: isCurrent ? 8 : 4, lineCap: .round)
+                        )
+                        .shadow(color: isCurrent ? currentColor.opacity(0.6) : .clear, radius: isCurrent ? 6 : 0)
+                        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: currentBeat)
                     }
                 } else {
+                    // 1拍子などの単一円
                     Circle()
-                        .fill(pieceColor(for: 1))
-                        .opacity(isPlaying ? 0.3 : 0.05)
+                        .stroke(
+                            isPlaying ? currentGradient : AnyShapeStyle(Color.white.opacity(0.1)),
+                            lineWidth: 8
+                        )
+                        .shadow(color: isPlaying ? currentColor.opacity(0.4) : .clear, radius: 10)
+                        .scaleEffect(isPlaying ? 1.02 : 1.0)
+                        .animation(.easeInOut(duration: 0.1), value: isPlaying)
                 }
             }
         }
-        .padding(4)
+        .padding(6)
     }
     
-    private func pieceColor(for beat: Int) -> Color {
-        guard beat == currentBeat else { return Color.white }
+    private var currentColor: Color {
         switch intensity {
-        case .strong:  return .orange
-        case .medium:  return .accentColor
-        case .weak:    return .blue
-        case .silence: return .clear // 無音時は表示しない
+        case .strong: return .orange
+        case .medium: return .cyan
+        case .weak, .silence: return .blue
         }
     }
     
-    private func pieceOpacity(for beat: Int) -> Double {
-        if beat == currentBeat { return 0.7 }
-        return 0.1
+    private var currentGradient: AnyShapeStyle {
+        switch intensity {
+        case .strong:
+            return AnyShapeStyle(LinearGradient(colors: [.orange, .yellow], startPoint: .topLeading, endPoint: .bottomTrailing))
+        case .medium:
+            return AnyShapeStyle(LinearGradient(colors: [.cyan, .blue], startPoint: .topLeading, endPoint: .bottomTrailing))
+        case .weak, .silence:
+            return AnyShapeStyle(Color.blue)
+        }
     }
 }
 
