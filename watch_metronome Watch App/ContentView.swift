@@ -33,7 +33,8 @@ struct ContentView: View {
             .contentShape(Rectangle())
             .focusable()
             .focused($isCrownFocused)
-            .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
+            // by: 0.1 にすることで、ゆっくり回した時の微調整を可能にします
+            .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 0.1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
             
             // 再生/停止ボタン
             Button {

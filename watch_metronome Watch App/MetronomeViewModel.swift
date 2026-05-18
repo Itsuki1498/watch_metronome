@@ -23,10 +23,14 @@ final class MetronomeViewModel {
         set { engine.bpm = newValue }
     }
 
-    /// 整数値としてのBPM（Digital Crownや表示用）
+    /// Digital Crown操作用のBPM（より細かなステップを許可）
     var displayBpm: Double {
         get { engine.bpm }
-        set { engine.bpm = Double(Int(newValue)) }
+        set { 
+            // 内部的には小数点以下も保持することで、
+            // 「ゆっくり回すと1ずつ、速く回すと大きく」変わる感度を実現します
+            engine.bpm = newValue
+        }
     }
     
     /// 動作中かどうか
