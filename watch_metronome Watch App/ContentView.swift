@@ -13,12 +13,17 @@ struct ContentView: View {
     
     var body: some View {
         VStack(spacing: 10) {
-            // 拍のインジケーター（簡易版）
-            HStack {
+            // 拍のインジケーター（強拍と弱拍で光り方を変える）
+            HStack(spacing: 6) {
                 ForEach(1...max(1, viewModel.numerator), id: \.self) { i in
+                    let isCurrent = i == viewModel.currentBeat
+                    let isStrong = i == 1 // 1拍目を強拍として表示
+                    
                     Circle()
-                        .fill(i == viewModel.currentBeat ? Color.accentColor : Color.gray.opacity(0.3))
-                        .frame(width: 8, height: 8)
+                        .fill(isCurrent ? (viewModel.isCurrentBeatStrong ? Color.orange : Color.accentColor) : Color.gray.opacity(0.3))
+                        .frame(width: isCurrent ? (viewModel.isCurrentBeatStrong ? 12 : 10) : 8, 
+                               height: isCurrent ? (viewModel.isCurrentBeatStrong ? 12 : 10) : 8)
+                        .animation(.spring(duration: 0.1), value: viewModel.currentBeat)
                 }
             }
             
@@ -33,8 +38,8 @@ struct ContentView: View {
             .contentShape(Rectangle())
             .focusable()
             .focused($isCrownFocused)
-            // by: 0.1 にすることで、ゆっくり回した時の微調整を可能にします
-            .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 0.1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
+            // by: 1 に戻し、BPMを整数で扱います
+            .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
             
             // 再生/停止ボタン
             Button {

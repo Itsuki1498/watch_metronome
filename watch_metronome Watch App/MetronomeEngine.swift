@@ -15,15 +15,14 @@ final class MetronomeEngine {
     // MARK: - Properties (設定値)
     
     /// テンポ (Beats Per Minute)
-    /// 40.0 〜 400.0 の範囲で設定します
+    /// 40 〜 400 の範囲で設定します
     var bpm: Double = 120.0 {
         didSet {
-            // ここで即座にタイマーを再スケジュール（deadline: .now()）すると、
-            // 変更した瞬間に次の拍が割り込んできて「ピピピ」となってしまいます。
-            // そのため、ここでは何もしないか、あるいは「次の拍の予定時刻」を
-            // 正確に再計算する必要があります。
-            // シンプルな解決策として、タイマーは一定間隔で動かし続け、
-            // tick()の中で最新のBPMを参照するように後ほど調整します。
+            // 整数に丸める
+            let roundedBpm = Double(Int(bpm))
+            if bpm != roundedBpm {
+                bpm = roundedBpm
+            }
         }
     }
     
@@ -49,7 +48,7 @@ final class MetronomeEngine {
     /// 内部的なタイマー
     private var timer: DispatchSourceTimer?
     
-    /// スレッド間でのデータ競合を防ぐためのロック
+    /// スレッド間でのデータ競合を防ぐためのロック（再帰的な呼び出しを許可）
     private let lock = NSRecursiveLock()
     
     /// 1拍ごとの通知用クロージャ
@@ -65,10 +64,20 @@ final class MetronomeEngine {
         guard !isPlaying else { return }
         
         isPlaying = true
-        tickCount = 0
+        tickCount = 1 // 1拍目
         
-        // 最初の拍の時刻を「今」に設定
-        nextTickTime = .now()
+        // 1拍目を「今この瞬間」に実行
+        let startTime = DispatchTime.now()
+        let currentNumerator = numerator
+        let isStrong = currentNumerator == 1 || (currentNumerator > 1 && (tickCount - 1) % currentNumerator == 0)
+        let currentBeat = currentNumerator == 0 ? 1 : ((tickCount - 1) % currentNumerator) + 1
+        
+        // 外部に即座に通知
+        onTick?(currentBeat, isStrong)
+        
+        // 2拍目の時刻を「正確に1拍分後」に設定
+        let interval = 60.0 / bpm
+        nextTickTime = startTime + interval
         
         if timer == nil {
             let queue = DispatchQueue(label: "com.watchmetronome.engine", qos: .userInteractive)
@@ -79,7 +88,7 @@ final class MetronomeEngine {
             timer?.resume()
         }
         
-        // 最初の拍を即座に実行（このタイマーが即座にtickを呼び出す）
+        // 2拍目を予約
         timer?.schedule(deadline: nextTickTime, leeway: .nanoseconds(0))
     }
     
@@ -106,28 +115,16 @@ final class MetronomeEngine {
         let currentNumerator = numerator
         let currentBpm = bpm
         
-        // 次の拍の予定時刻を計算（今の処理が終わるのを待たず、予定されていた時間から加算する）
+        // 次の拍（未来）を予約
         let interval = 60.0 / currentBpm
         nextTickTime = nextTickTime + interval
-        
-        // 次の拍を正確な時刻に予約
         timer?.schedule(deadline: nextTickTime, leeway: .nanoseconds(0))
         lock.unlock()
         
-        // 判定
-        var isStrong: Bool = false
-        if currentNumerator == 0 {
-            isStrong = false
-        } else if currentNumerator == 1 {
-            isStrong = true
-        } else {
-            isStrong = (currentTick - 1) % currentNumerator == 0
-        }
-        
+        // 現在の拍を判定して通知
+        let isStrong = currentNumerator == 1 || (currentNumerator > 1 && (currentTick - 1) % currentNumerator == 0)
         let currentBeat = currentNumerator == 0 ? 1 : ((currentTick - 1) % currentNumerator) + 1
         
-        // 通知
         onTick?(currentBeat, isStrong)
     }
-}
 }

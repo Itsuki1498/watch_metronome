@@ -23,14 +23,10 @@ final class MetronomeViewModel {
         set { engine.bpm = newValue }
     }
 
-    /// Digital Crown操作用のBPM（より細かなステップを許可）
+    /// Digital Crown操作用のBPM
     var displayBpm: Double {
         get { engine.bpm }
-        set { 
-            // 内部的には小数点以下も保持することで、
-            // 「ゆっくり回すと1ずつ、速く回すと大きく」変わる感度を実現します
-            engine.bpm = newValue
-        }
+        set { engine.bpm = Double(Int(newValue)) }
     }
     
     /// 動作中かどうか
@@ -40,6 +36,9 @@ final class MetronomeViewModel {
     
     /// 現在の拍数 (1 〜 numerator)
     var currentBeat: Int = 1
+    
+    /// 現在が強拍かどうか
+    var isCurrentBeatStrong: Bool = false
     
     /// 分子（何拍子か）
     var numerator: Int {
@@ -66,6 +65,7 @@ final class MetronomeViewModel {
             // 画面表示を更新（メインスレッドで行う）
             DispatchQueue.main.async {
                 self?.currentBeat = beat
+                self?.isCurrentBeatStrong = isStrong
             }
         }
     }
