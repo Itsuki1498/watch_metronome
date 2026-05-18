@@ -7,7 +7,7 @@
 
 import Testing
 import Foundation
-@testable import watch_metronome
+@testable import watch_metronome_Watch_App
 
 /// MetronomeEngine の挙動を検証するテスト
 struct MetronomeEngineTests {

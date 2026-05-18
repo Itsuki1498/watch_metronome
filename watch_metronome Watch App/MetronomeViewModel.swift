@@ -51,7 +51,7 @@ final class MetronomeViewModel {
     
     private func setupEngine() {
         // エンジンからの通知を受け取る
-        engine.onTick = { [weak self] beat, isStrong in
+        engine.onTick = { [weak self] (beat: Int, isStrong: Bool) in
             // 振動を実行
             if isStrong {
                 self?.hapticManager.playStrong()
