@@ -159,9 +159,10 @@ struct PieIndicatorView: View {
     private func pieceColor(for beat: Int) -> Color {
         guard beat == currentBeat else { return Color.white }
         switch intensity {
-        case .strong: return .orange
-        case .medium: return .accentColor
-        case .weak:   return .blue
+        case .strong:  return .orange
+        case .medium:  return .accentColor
+        case .weak:    return .blue
+        case .silence: return .clear // 無音時は表示しない
         }
     }
     
