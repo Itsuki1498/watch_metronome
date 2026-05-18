@@ -72,6 +72,16 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		98114B612FBAFABB00E66AEC /* watch_metronome */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = watch_metronome;
+			sourceTree = "<group>";
+		};
+		98114B6F2FBAFABC00E66AEC /* watch_metronomeTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = watch_metronomeTests;
+			sourceTree = "<group>";
+		};
 		98114B792FBAFABC00E66AEC /* watch_metronomeUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = watch_metronomeUITests;
@@ -143,6 +153,8 @@
 		98114B562FBAFABB00E66AEC = {
 			isa = PBXGroup;
 			children = (
+				98114B612FBAFABB00E66AEC /* watch_metronome */,
+				98114B6F2FBAFABC00E66AEC /* watch_metronomeTests */,
 				98114B792FBAFABC00E66AEC /* watch_metronomeUITests */,
 				98114B862FBAFABC00E66AEC /* watch_metronome Watch App */,
 				98114B942FBAFABC00E66AEC /* watch_metronome Watch AppTests */,
@@ -181,6 +193,9 @@
 			dependencies = (
 				98114B852FBAFABC00E66AEC /* PBXTargetDependency */,
 			);
+			fileSystemSynchronizedGroups = (
+				98114B612FBAFABB00E66AEC /* watch_metronome */,
+			);
 			name = watch_metronome;
 			packageProductDependencies = (
 			);
@@ -200,6 +215,9 @@
 			);
 			dependencies = (
 				98114B6E2FBAFABC00E66AEC /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				98114B6F2FBAFABC00E66AEC /* watch_metronomeTests */,
 			);
 			name = watch_metronomeTests;
 			packageProductDependencies = (
