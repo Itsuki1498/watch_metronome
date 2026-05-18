@@ -133,11 +133,22 @@ final class MetronomeViewModel {
     
     private func setupEngine() {
         engine.onTick = { [weak self] (beat: Int, intensity: BeatIntensity) in
-            switch intensity {
-            case .strong:  self?.hapticManager.playStrong()
-            case .medium:  self?.hapticManager.playMedium()
-            case .weak:    self?.hapticManager.playWeak()
-            case .silence: break // 何もしない
+            // 振動の使い分け
+            if self?.isSimplifiedMode == true {
+                // 簡易モード時
+                switch intensity {
+                case .strong:  self?.hapticManager.playStrong()
+                case .medium:  self?.hapticManager.playWeak() // 中拍を弱拍の振動にする
+                default:       break // 弱拍(weak)や無音(silence)は振動させない
+                }
+            } else {
+                // 通常モード時
+                switch intensity {
+                case .strong:  self?.hapticManager.playStrong()
+                case .medium:  self?.hapticManager.playMedium()
+                case .weak:    self?.hapticManager.playWeak()
+                case .silence: break
+                }
             }
             
             DispatchQueue.main.async {

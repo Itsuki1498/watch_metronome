@@ -59,7 +59,7 @@ struct ContentView: View {
                 HStack(spacing: 4) {
                     // 分子
                     settingItem(target: .numerator, label: "\(viewModel.numerator)", size: 26)
-                        .digitalCrownRotation($viewModel.displayNumerator, from: 0, through: 32, by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
+                        .digitalCrownRotation($viewModel.displayNumerator, from: 0, through: 32, by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                     
                     Text("/")
                         .font(.system(size: 20, weight: .light))
@@ -67,7 +67,7 @@ struct ContentView: View {
                     
                     // 分母
                     settingItem(target: .denominator, label: "\(viewModel.denominator)", size: 26)
-                        .digitalCrownRotation($viewModel.displayDenominatorIndex, from: 0, through: Double(viewModel.denominatorOptions.count - 1), by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
+                        .digitalCrownRotation($viewModel.displayDenominatorIndex, from: 0, through: Double(viewModel.denominatorOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
                 
                 // 簡易モード切替

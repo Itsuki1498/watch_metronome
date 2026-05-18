@@ -157,11 +157,12 @@ final class MetronomeEngine {
                 // 強拍はそのまま
                 onTick?(logicalBeat, .strong)
             } else if intensity == .medium {
-                // 中拍を弱拍に格下げして鳴らす
-                onTick?(logicalBeat, .weak)
+                // 中拍はそのまま（ViewModel側で振動だけ弱める）
+                onTick?(logicalBeat, .medium)
             } else {
-                // 本来の弱拍は完全に無視（通知もしない）
-                // これによりUIも振動もスキップされます
+                // 弱拍のタイミングでも通知は送る（UIを動かすため）
+                // ただし強さを .silence にすることで振動を消す
+                onTick?(logicalBeat, .silence)
             }
         } else {
             // 通常モード
