@@ -20,7 +20,9 @@ final class MetronomeEngine {
             if bpm < 40 { bpm = 40 }
             if bpm > 400 { bpm = 400 }
             if isPlaying {
-                updateTimerSchedule(nextBeatOffset: nil)
+                // 演奏中のBPM変更：次の拍の予定を現在時刻基準ではなく、
+                // 「最後の拍が鳴った時刻」から再計算することで、操作中の停止を防ぎます。
+                updateTimerSchedule(isRestart: true)
             }
         }
     }
@@ -39,6 +41,9 @@ final class MetronomeEngine {
     
     /// 現在の拍カウント
     private var tickCount: Int = 0
+    
+    /// 最後に拍が鳴った時刻
+    private var lastTickTime: DispatchTime = .now()
     
     /// 内部的なタイマー
     private var timer: DispatchSourceTimer?
@@ -60,14 +65,10 @@ final class MetronomeEngine {
         guard !isPlaying else { return }
         
         isPlaying = true
-        tickCount = 1 // 今から1拍目
+        tickCount = 1 // 1拍目
+        lastTickTime = .now()
         
-        // 基準時間を取得
-        let startTime = DispatchTime.now()
-        
-        // --- 1. ダブりの解消 ---
-        // 前回の「ウォームアップ振動」を削除しました。
-        // 代わりに、このスレッドで即座に1拍目の通知を行います。
+        // 1拍目を即座に発火
         triggerTick(beat: 1)
         
         if timer == nil {
@@ -78,9 +79,8 @@ final class MetronomeEngine {
             timer?.resume()
         }
         
-        // --- 2. 2拍目以降を正確な間隔で予約 ---
-        let interval = 60.0 / Double(bpm)
-        timer?.schedule(deadline: startTime + interval, repeating: interval, leeway: .nanoseconds(0))
+        // 2拍目以降を予約
+        updateTimerSchedule(isRestart: false)
     }
     
     /// メトロノームを停止します
@@ -93,21 +93,37 @@ final class MetronomeEngine {
         timer = nil
     }
     
-    /// タイマーのスケジュールを更新
-    private func updateTimerSchedule(nextBeatOffset: Double?) {
+    /// タイマーのスケジュールを設定・更新
+    private func updateTimerSchedule(isRestart: Bool) {
         let interval = 60.0 / Double(bpm)
-        let deadline: DispatchTime = .now() + (nextBeatOffset ?? interval)
+        
+        let deadline: DispatchTime
+        if isRestart {
+            // BPM変更時：最後に鳴った時刻 + 新しい間隔
+            // もし既にその時刻を過ぎていたら、即座（.now()）に鳴らします
+            let nextTime = lastTickTime + interval
+            deadline = nextTime < .now() ? .now() : nextTime
+        } else {
+            // 開始時：今から正確な間隔後（1拍目は既にstart()で鳴らしているため）
+            deadline = lastTickTime + interval
+        }
+        
+        // 繰り返し間隔も新しいBPMに更新
         timer?.schedule(deadline: deadline, repeating: interval, leeway: .nanoseconds(0))
     }
     
     /// 内部的な発火処理
     private func triggerTick(beat: Int) {
+        // 最後に鳴った時刻を更新（この時刻を基準に次のBPM変更を計算する）
+        lock.lock()
+        lastTickTime = .now()
         let currentNumerator = numerator
+        lock.unlock()
+        
         let isStrong = currentNumerator == 1 || (currentNumerator > 1 && (beat - 1) % currentNumerator == 0)
         let displayBeat = currentNumerator == 0 ? 1 : ((beat - 1) % currentNumerator) + 1
         
-        // UIや振動の処理。
-        // メインスレッドへ渡す際の僅かなラグを考慮し、バックグラウンドでの即時実行も併用します。
+        // 通知（メインスレッドへのディスパッチはViewModel側で行う）
         onTick?(displayBeat, isStrong)
     }
     
