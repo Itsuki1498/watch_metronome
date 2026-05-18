@@ -26,32 +26,48 @@ struct ContentView: View {
     }
     
     private var mainContent: some View {
-        VStack(spacing: 4) {
-            // 拍のインジケーター（強拍と弱拍で光り方を変える）
+        VStack(spacing: 0) {
+            // 拍のインジケーター
             indicatorView
                 .frame(height: 20)
+                .padding(.top, 2)
             
-            VStack(spacing: 0) {
-                // BPM設定
-                VStack(spacing: -2) {
-                    Text("\(viewModel.bpm)")
-                        .font(.system(size: 40, weight: .bold, design: .rounded))
-                        .foregroundStyle(focusedField == .bpm ? Color.accentColor : .primary)
-                    Text("BPM")
-                        .font(.system(size: 10, weight: .medium))
+            Spacer(minLength: 0)
+            
+            // 設定項目エリア
+            VStack(spacing: 2) {
+                // 1行目: BPMと基準音価
+                HStack(spacing: 4) {
+                    // 基準音価
+                    Text(viewModel.currentNoteName)
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundStyle(focusedField == .noteValue ? Color.accentColor : .secondary)
+                        .padding(.horizontal, 4)
+                        .background(focusedField == .noteValue ? Color.accentColor.opacity(0.2) : Color.clear)
+                        .cornerRadius(4)
+                        .onTapGesture { focusedField = .noteValue }
+                        .focusable()
+                        .focused($focusedField, equals: .noteValue)
+                        .digitalCrownRotation($viewModel.displayNoteValueIndex, from: 0, through: Double(viewModel.noteValueOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
+                    
+                    Text("=")
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
+                    
+                    // BPM
+                    Text("\(viewModel.bpm)")
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .foregroundStyle(focusedField == .bpm ? Color.accentColor : .primary)
+                        .onTapGesture { focusedField = .bpm }
+                        .focusable()
+                        .focused($focusedField, equals: .bpm)
+                        .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
-                .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
-                .onTapGesture { focusedField = .bpm }
-                .focusable()
-                .focused($focusedField, equals: .bpm)
-                .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
                 
-                // 拍子設定 (分子 / 分母)
-                HStack(spacing: 8) {
+                // 2行目: 拍子 (分子 / 分母)
+                HStack(spacing: 6) {
                     Text("\(viewModel.numerator)")
-                        .font(.system(size: 24, weight: .semibold, design: .rounded))
+                        .font(.system(size: 22, weight: .semibold, design: .rounded))
                         .foregroundStyle(focusedField == .numerator ? Color.accentColor : .primary)
                         .onTapGesture { focusedField = .numerator }
                         .focusable()
@@ -59,30 +75,30 @@ struct ContentView: View {
                         .digitalCrownRotation($viewModel.displayNumerator, from: 0, through: 32, by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                     
                     Text("/")
-                        .font(.system(size: 18, weight: .light))
+                        .font(.system(size: 16, weight: .light))
                         .foregroundStyle(.secondary)
                     
                     Text("\(viewModel.denominator)")
-                        .font(.system(size: 24, weight: .semibold, design: .rounded))
+                        .font(.system(size: 22, weight: .semibold, design: .rounded))
                         .foregroundStyle(focusedField == .denominator ? Color.accentColor : .primary)
                         .onTapGesture { focusedField = .denominator }
                         .focusable()
                         .focused($focusedField, equals: .denominator)
-                        .digitalCrownRotation($viewModel.displayDenominatorIndex, from: 0, through: Double(viewModel.denominatorOptions.count - 1), by: 1, sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
+                        // 感度を上げてスムーズに切り替え
+                        .digitalCrownRotation($viewModel.displayDenominatorIndex, from: 0, through: Double(viewModel.denominatorOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
-                .padding(.top, 2)
             }
             
-            Spacer(minLength: 1)
+            Spacer(minLength: 2)
             
-            // 再生/停止ボタン
+            // 再生ボタン
             Button {
                 viewModel.togglePlayback()
             } label: {
                 Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
                     .font(.title3)
             }
-            .frame(height: 36)
+            .frame(height: 34)
             .tint(viewModel.isPlaying ? .red : .green)
             .buttonStyle(.borderedProminent)
         }
@@ -90,22 +106,19 @@ struct ContentView: View {
     }
     
     private var indicatorView: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 4) {
             let count = viewModel.numerator
             if count == 0 {
-                // 0拍子: 1つのドットが弱く光る
                 circle(isCurrent: viewModel.isPlaying, isStrong: false)
             } else if count == 1 {
-                // 1拍子: 1つのドットが強く光る
                 circle(isCurrent: viewModel.isPlaying, isStrong: true)
             } else {
-                // 2拍子以上: 最大8個まで表示
                 ForEach(1...min(count, 8), id: \.self) { i in
                     circle(isCurrent: i == viewModel.currentBeat, isStrong: i == 1)
                 }
                 if count > 8 {
                     Text("...")
-                        .font(.caption2)
+                        .font(.system(size: 8))
                         .foregroundStyle(.secondary)
                 }
             }

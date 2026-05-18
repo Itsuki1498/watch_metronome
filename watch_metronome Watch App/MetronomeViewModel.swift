@@ -8,6 +8,12 @@
 import Foundation
 import Observation
 
+/// 音価の定義
+struct NoteValue: Hashable {
+    let name: String
+    let multiplier: Double // 四分音符を 1.0 とした倍率
+}
+
 /// メトロノームの画面状態と操作を管理するViewModel
 @Observable
 final class MetronomeViewModel {
@@ -22,23 +28,21 @@ final class MetronomeViewModel {
     
     /// 編集対象の項目
     enum EditTarget: Hashable {
-        case bpm, numerator, denominator
+        case bpm, numerator, denominator, noteValue
     }
     
-    /// 現在のBPM (Int型)
+    /// 現在のBPM
     var bpm: Int {
         get { engine.bpm }
         set { engine.bpm = newValue }
     }
 
-    /// Digital Crown操作用のBPM (Double)
+    /// Digital Crown操作用のBPM
     var displayBpm: Double {
         get { Double(engine.bpm) }
         set { 
             let newIntValue = Int(newValue)
-            if newIntValue != engine.bpm {
-                engine.bpm = newIntValue
-            }
+            if newIntValue != engine.bpm { engine.bpm = newIntValue }
         }
     }
     
@@ -47,9 +51,7 @@ final class MetronomeViewModel {
         get { Double(engine.numerator) }
         set { 
             let newIntValue = Int(newValue)
-            if newIntValue != engine.numerator {
-                engine.numerator = newIntValue
-            }
+            if newIntValue != engine.numerator { engine.numerator = newIntValue }
         }
     }
     
@@ -59,41 +61,66 @@ final class MetronomeViewModel {
         set { 
             let index = Int(newValue)
             if index >= 0 && index < denominatorOptions.count {
-                engine.denominator = denominatorOptions[index]
+                let newDenom = denominatorOptions[index]
+                if newDenom != engine.denominator {
+                    engine.denominator = newDenom
+                    // 分母を変えたら、デフォルトの音価もそれに合わせる
+                    syncNoteValueToDenominator()
+                }
             }
         }
     }
     
-    /// 動作中かどうか
-    var isPlaying: Bool {
-        engine.isPlaying
+    /// Digital Crown操作用の音価インデックス
+    var displayNoteValueIndex: Double {
+        get { Double(noteValueIndex) }
+        set { 
+            let index = Int(newValue)
+            if index >= 0 && index < noteValueOptions.count {
+                noteValueIndex = index
+            }
+        }
     }
     
-    /// 現在の拍数 (1 〜 numerator)
-    var currentBeat: Int = 1
+    var noteValueIndex: Int = 4 { // デフォルトは四分音符
+        didSet {
+            engine.referenceNoteMultiplier = noteValueOptions[noteValueIndex].multiplier
+        }
+    }
     
-    /// 現在が強拍かどうか
+    /// 動作中かどうか
+    var isPlaying: Bool { engine.isPlaying }
+    
+    /// 現在の拍数
+    var currentBeat: Int = 1
     var isCurrentBeatStrong: Bool = false
     
-    /// 分子（何拍子か）
-    var numerator: Int {
-        get { engine.numerator }
-    }
-    
-    /// 分母
-    var denominator: Int {
-        get { engine.denominator }
-    }
-    
-    /// 分母の選択肢
+    /// 各種設定値
+    var numerator: Int { engine.numerator }
+    var denominator: Int { engine.denominator }
     let denominatorOptions = [2, 4, 8, 16, 32]
+    
+    let noteValueOptions: [NoteValue] = [
+        NoteValue(name: "全", multiplier: 4.0),
+        NoteValue(name: "付.2", multiplier: 3.0),
+        NoteValue(name: "2", multiplier: 2.0),
+        NoteValue(name: "付.4", multiplier: 1.5),
+        NoteValue(name: "4", multiplier: 1.0),
+        NoteValue(name: "付.8", multiplier: 0.75),
+        NoteValue(name: "8", multiplier: 0.5),
+        NoteValue(name: "付.16", multiplier: 0.375),
+        NoteValue(name: "16", multiplier: 0.25),
+        NoteValue(name: "32", multiplier: 0.125)
+    ]
+    
+    var currentNoteName: String {
+        noteValueOptions[noteValueIndex].name
+    }
     
     // MARK: - Initialization
     
     init() {
         setupEngine()
-        
-        // 起動から1秒間待機
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             self.isSystemReady = true
         }
@@ -101,14 +128,9 @@ final class MetronomeViewModel {
     
     private func setupEngine() {
         engine.onTick = { [weak self] (beat: Int, isStrong: Bool) in
-            // 振動
-            if isStrong {
-                self?.hapticManager.playStrong()
-            } else {
-                self?.hapticManager.playWeak()
-            }
+            if isStrong { self?.hapticManager.playStrong() }
+            else { self?.hapticManager.playWeak() }
             
-            // UI更新
             DispatchQueue.main.async {
                 self?.currentBeat = beat
                 self?.isCurrentBeatStrong = isStrong
@@ -116,13 +138,18 @@ final class MetronomeViewModel {
         }
     }
     
+    private func syncNoteValueToDenominator() {
+        // 分母 (2, 4, 8...) に対応する音価名を探して設定
+        let targetName = "\(engine.denominator)"
+        if let index = noteValueOptions.firstIndex(where: { $0.name == targetName }) {
+            noteValueIndex = index
+        }
+    }
+    
     // MARK: - Actions
     
     func togglePlayback() {
-        if engine.isPlaying {
-            engine.stop()
-        } else {
-            engine.start()
-        }
+        if engine.isPlaying { engine.stop() }
+        else { engine.start() }
     }
 }
