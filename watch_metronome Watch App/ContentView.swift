@@ -6,18 +6,42 @@
 //
 
 import SwiftUI
+import WatchKit
 
 struct ContentView: View {
     @State private var viewModel = MetronomeViewModel()
     @FocusState private var isCrownFocused: Bool
     
     var body: some View {
+        ZStack {
+            if !viewModel.isSystemReady {
+                // 起動直後の不安定さを回避するための準備画面
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text("Preparing...")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                // メインUI
+                mainContent
+            }
+        }
+        .onAppear {
+            // 画面が表示された時に自動でフォーカスを当てる
+            isCrownFocused = true
+            
+            // 振動エンジンをあらかじめ叩き起こしておく（無音に近い微細な振動を一度だけ）
+            WKInterfaceDevice.current().play(.click)
+        }
+    }
+    
+    private var mainContent: some View {
         VStack(spacing: 10) {
             // 拍のインジケーター（強拍と弱拍で光り方を変える）
             HStack(spacing: 8) {
                 ForEach(1...max(1, viewModel.numerator), id: \.self) { i in
                     let isCurrent = i == viewModel.currentBeat
-                    let isFirstBeat = i == 1
                     
                     Circle()
                         .fill(isCurrent ? (viewModel.isCurrentBeatStrong ? Color.orange : Color.accentColor) : Color.gray.opacity(0.3))
@@ -41,7 +65,6 @@ struct ContentView: View {
             .contentShape(Rectangle())
             .focusable()
             .focused($isCrownFocused)
-            // by: 1 に戻し、BPMを整数で扱います
             .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
             
             // 再生/停止ボタン
@@ -55,10 +78,6 @@ struct ContentView: View {
             .buttonStyle(.borderedProminent)
         }
         .padding()
-        .onAppear {
-            // 画面が表示された時に自動でフォーカスを当てる
-            isCrownFocused = true
-        }
     }
 }
 

@@ -17,6 +17,9 @@ final class MetronomeViewModel {
     private let engine = MetronomeEngine()
     private let hapticManager = HapticManager()
     
+    /// システムの準備ができているか（起動直後の不安定さを回避するため）
+    var isSystemReady: Bool = false
+    
     /// 現在のBPM (Int型)
     var bpm: Int {
         get { engine.bpm }
@@ -50,19 +53,24 @@ final class MetronomeViewModel {
     
     init() {
         setupEngine()
+        
+        // 起動から1秒間、システムが落ち着くのを待ちます
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.isSystemReady = true
+        }
     }
     
     private func setupEngine() {
         // エンジンからの通知を受け取る
         engine.onTick = { [weak self] (beat: Int, isStrong: Bool) in
-            // 振動を実行
+            // 振動はラグを避けるため、このバックグラウンドスレッドで即座に実行
             if isStrong {
                 self?.hapticManager.playStrong()
             } else {
                 self?.hapticManager.playWeak()
             }
             
-            // 画面表示を更新（メインスレッドで行う）
+            // 画面表示の更新（メインスレッド）
             DispatchQueue.main.async {
                 self?.currentBeat = beat
                 self?.isCurrentBeatStrong = isStrong
