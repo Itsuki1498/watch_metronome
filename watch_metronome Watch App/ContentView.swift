@@ -143,8 +143,8 @@ struct ModernPieIndicatorView: View {
                     .stroke(Color.white.opacity(0.03), lineWidth: 1)
                 
                 // 2. 内側の「基準音符」インジケーター層
-                let mediumCount = max(1, viewModel.numerator / max(1, viewModel.ticksPerMediumBeat))
                 if viewModel.numerator > 0 {
+                    let mediumCount = max(1, viewModel.numerator / max(1, viewModel.ticksPerMediumBeat))
                     ForEach(0..<mediumCount, id: \.self) { i in
                         let angle = Double(i) * (360.0 / Double(mediumCount)) - 90
                         Path { path in
@@ -160,34 +160,10 @@ struct ModernPieIndicatorView: View {
                 // 3. 外側の「拍セグメント」（追従消灯エフェクト付き）
                 if viewModel.numerator > 1 {
                     let progress = currentMeasureProgress()
+                    let currentAngle = (progress * 360.0) - 90.0
                     
                     ForEach(0..<viewModel.numerator, id: \.self) { i in
-                        let startAngle = Double(i) * (360.0 / Double(viewModel.numerator)) - 90
-                        let endAngle = Double(i + 1) * (360.0 / Double(viewModel.numerator)) - 90
-                        let isCurrent = (i + 1) == viewModel.currentBeat
-                        
-                        // 追従消灯ロジック:
-                        // 針の現在位置（角度）がセグメント内にある場合、後ろから削っていく
-                        let currentAngle = (progress * 360.0) - 90.0
-                        let effectiveStartAngle: Double
-                        if isCurrent {
-                            effectiveStartAngle = max(startAngle, currentAngle)
-                        } else {
-                            effectiveStartAngle = startAngle
-                        }
-                        
-                        if effectiveStartAngle < endAngle - 0.5 {
-                            Path { path in
-                                path.addArc(center: center, radius: outerRadius,
-                                            startAngle: .degrees(effectiveStartAngle + 0.5),
-                                            endAngle: .degrees(endAngle - 0.5),
-                                            clockwise: false)
-                            }
-                            .stroke(
-                                isCurrent ? colorForIntensity(viewModel.currentIntensity) : Color.white.opacity(0.03),
-                                style: StrokeStyle(lineWidth: isCurrent ? 8 : 2, lineCap: .butt)
-                            )
-                        }
+                        segmentView(index: i, currentAngle: currentAngle, center: center, radius: outerRadius)
                     }
                 }
                 
@@ -211,6 +187,32 @@ struct ModernPieIndicatorView: View {
                         .offset(y: -innerRadius + 4)
                         .rotationEffect(.degrees(angle + 90))
                 }
+            }
+        }
+    }
+    
+    // セグメントの描画を別関数に切り出し、コンパイラの型チェック負荷を軽減
+    private func segmentView(index: Int, currentAngle: Double, center: CGPoint, radius: CGFloat) -> some View {
+        let stepAngle = 360.0 / Double(viewModel.numerator)
+        let startAngle = Double(index) * stepAngle - 90
+        let endAngle = Double(index + 1) * stepAngle - 90
+        let isCurrent = (index + 1) == viewModel.currentBeat
+        
+        let effectiveStartAngle = isCurrent ? max(startAngle, currentAngle) : startAngle
+        let hasContent = effectiveStartAngle < endAngle - 0.5
+        
+        return Group {
+            if hasContent {
+                Path { path in
+                    path.addArc(center: center, radius: radius,
+                                startAngle: .degrees(effectiveStartAngle + 0.5),
+                                endAngle: .degrees(endAngle - 0.5),
+                                clockwise: false)
+                }
+                .stroke(
+                    isCurrent ? colorForIntensity(viewModel.currentIntensity) : Color.white.opacity(0.03),
+                    style: StrokeStyle(lineWidth: isCurrent ? 8 : 2, lineCap: .butt)
+                )
             }
         }
     }
