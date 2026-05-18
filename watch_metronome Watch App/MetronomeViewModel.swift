@@ -91,8 +91,18 @@ final class MetronomeViewModel {
     var currentBeat: Int = 1
     var currentIntensity: BeatIntensity = .weak
     
+    /// 針の描画のためのプロパティ
     var numerator: Int { engine.numerator }
     var denominator: Int { engine.denominator }
+    
+    /// 最後に拍が鳴った時刻と、次の拍までの予定間隔（秒）を公開
+    var lastTickTime: DispatchTime { engine.lastTickTime }
+    var tickInterval: Double {
+        let baseNoteValue = 4.0 / Double(engine.denominator)
+        let internalBpm = Double(engine.bpm) * (engine.referenceNoteMultiplier / baseNoteValue)
+        return 60.0 / internalBpm
+    }
+    
     let denominatorOptions = [2, 4, 8, 16, 32]
     
     let noteValueOptions: [NoteValue] = [
@@ -123,12 +133,11 @@ final class MetronomeViewModel {
     
     private func setupEngine() {
         engine.onTick = { [weak self] (beat: Int, intensity: BeatIntensity) in
-            // 振動の使い分け（一生君の指示通り、格下げせず弱拍のみ無音にする）
             if self?.isSimplifiedMode == true {
                 switch intensity {
                 case .strong: self?.hapticManager.playStrong()
-                case .medium: self?.hapticManager.playMedium() // 格下げせずそのまま
-                default: break // 弱拍(weak)や無音(silence)は振動させない
+                case .medium: self?.hapticManager.playMedium()
+                default: break
                 }
             } else {
                 switch intensity {
