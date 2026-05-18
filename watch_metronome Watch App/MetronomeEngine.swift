@@ -129,7 +129,12 @@ final class MetronomeEngine {
         
         var intensity: BeatIntensity
         if currentNumerator == 0 {
-            intensity = .weak
+            // 0拍子の場合は強拍を作らず、全てを弱拍（または基準音符の節目なら中拍）として扱う
+            if (currentTick - 1) % currentTicksPerMedium == 0 {
+                intensity = .medium
+            } else {
+                intensity = .weak
+            }
         } else if logicalBeat == 1 {
             intensity = .strong
         } else if (logicalBeat - 1) % currentTicksPerMedium == 0 {
