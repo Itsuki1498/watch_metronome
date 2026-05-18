@@ -22,6 +22,12 @@ final class MetronomeViewModel {
         get { engine.bpm }
         set { engine.bpm = newValue }
     }
+
+    /// 整数値としてのBPM（Digital Crownや表示用）
+    var displayBpm: Double {
+        get { engine.bpm }
+        set { engine.bpm = Double(Int(newValue)) }
+    }
     
     /// 動作中かどうか
     var isPlaying: Bool {
@@ -33,7 +39,8 @@ final class MetronomeViewModel {
     
     /// 分子（何拍子か）
     var numerator: Int {
-        engine.numerator
+        get { engine.numerator }
+        set { engine.numerator = newValue }
     }
     
     // MARK: - Initialization

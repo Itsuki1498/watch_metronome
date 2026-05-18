@@ -23,15 +23,15 @@ struct ContentView: View {
             
             // BPM表示
             VStack {
-                Text("\(Int(viewModel.bpm))")
+                Text("\(Int(viewModel.displayBpm))")
                     .font(.system(size: 50, weight: .bold, design: .rounded))
                 Text("BPM")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            // Digital Crownによる操作
+            .contentShape(Rectangle())
             .focusable()
-            .digitalCrownRotation($viewModel.bpm, from: 40, through: 400, by: 1, sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
+            .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 1, sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
             
             // 再生/停止ボタン
             Button {
