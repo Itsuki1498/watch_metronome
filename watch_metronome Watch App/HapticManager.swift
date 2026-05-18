@@ -10,19 +10,18 @@ import WatchKit
 /// Apple Watchの触覚フィードバック（振動）を管理するクラス
 final class HapticManager {
     
-    /// 強拍用の振動パターン（しっかりした振動）
+    /// 強拍用の振動パターン（突き上げるような強い衝撃）
     func playStrong() {
         WKInterfaceDevice.current().play(.directionUp)
     }
     
-    /// 中拍用の振動パターン（標準的な振動）
+    /// 中拍用の振動パターン（標準的な手応えのある衝撃）
     func playMedium() {
-        WKInterfaceDevice.current().play(.click)
+        WKInterfaceDevice.current().play(.directionDown)
     }
     
-    /// 弱拍用の振動パターン（控えめな振動）
+    /// 弱拍用の振動パターン（指先で叩くような軽いタップ）
     func playWeak() {
-        // 弱拍は非常に軽く
-        WKInterfaceDevice.current().play(.directionDown)
+        WKInterfaceDevice.current().play(.click)
     }
 }

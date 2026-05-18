@@ -11,9 +11,10 @@ import WatchKit
 
 /// 拍の強さ
 enum BeatIntensity {
-    case strong // 強拍 (1拍目)
-    case medium // 中拍 (基準音符の節目)
-    case weak   // 弱拍 (最小単位の刻み)
+    case strong   // 強拍 (1拍目)
+    case medium   // 中拍 (基準音符の節目)
+    case weak     // 弱拍 (最小単位の刻み)
+    case silence  // 無音 (簡易モードでのスキップ用)
 }
 
 /// メトロノームのリズム生成を担うエンジン
@@ -38,9 +39,8 @@ final class MetronomeEngine {
         didSet { updateConstants() }
     }
     
-    var isSimplifiedMode: Bool = false {
-        didSet { if isPlaying { updateTimerSchedule(isRestart: true) } }
-    }
+    /// 簡易モード: 弱拍を消し、中拍を弱拍として扱う
+    var isSimplifiedMode: Bool = false
     
     private(set) var isPlaying: Bool = false
     private var tickCount: Int = 0
@@ -53,25 +53,23 @@ final class MetronomeEngine {
     
     // MARK: - Logic Constants
     
+    /// 常に最小単位（分母）の間隔でタイマーを回す
     private var internalInterval: Double = 0.5
     private var ticksPerMediumBeat: Int = 1
 
     private func updateConstants() {
-        // 分母に応じた基準音価（例: 四分音符=1.0）
-        let baseNoteValue = 4.0 / Double(denominator)
+        // 最小単位（分母）の音価（例: 8分音符なら0.5）
+        let unitNoteValue = 4.0 / Double(denominator)
         
-        // 内部BPM = 表示BPM * (基準音価倍率 / (4.0 / 分母))
-        let internalBpm = Double(bpm) * (referenceNoteMultiplier / baseNoteValue)
+        // 内部BPM = 表示BPM * (基準音価 / 最小単位)
+        // 例: 付点4分(1.5)=120, 12/8(0.5) のとき 120 * (1.5/0.5) = 360
+        let internalBpm = Double(bpm) * (referenceNoteMultiplier / unitNoteValue)
         
-        // 中拍の間隔（最小単位何個分か）
-        ticksPerMediumBeat = max(1, Int(round(referenceNoteMultiplier / baseNoteValue)))
+        // 中拍の間隔（最小単位何個分で基準音符になるか）
+        ticksPerMediumBeat = max(1, Int(round(referenceNoteMultiplier / unitNoteValue)))
         
-        // 刻み間隔
-        if isSimplifiedMode {
-            internalInterval = 60.0 / (internalBpm / Double(ticksPerMediumBeat))
-        } else {
-            internalInterval = 60.0 / internalBpm
-        }
+        // **重要**: テンポを維持するため、簡易モードでもタイマー間隔は「最小単位」で固定
+        internalInterval = 60.0 / internalBpm
         
         if isPlaying { updateTimerSchedule(isRestart: true) }
     }
@@ -113,7 +111,6 @@ final class MetronomeEngine {
             let nextTime = lastTickTime + internalInterval
             deadline = nextTime < .now() ? .now() : nextTime
         } else {
-            // 最初の1拍目が100ms後に鳴るように
             deadline = .now() + .milliseconds(100)
             lastTickTime = deadline - internalInterval
         }
@@ -132,25 +129,43 @@ final class MetronomeEngine {
         lastTickTime = .now()
         
         let currentNumerator = numerator
-        let step = isSimplifiedMode ? ticksPerMediumBeat : 1
+        let currentTicksPerMedium = ticksPerMediumBeat
+        let simplified = isSimplifiedMode
         lock.unlock()
         
         // 論理的な拍位置 (1 〜 numerator)
         let totalTicksInMeasure = max(1, currentNumerator)
-        let logicalBeat = ((currentTick - 1) * step) % totalTicksInMeasure + 1
+        let logicalBeat = ((currentTick - 1) % totalTicksInMeasure) + 1
         
-        // 強弱判定
-        let intensity: BeatIntensity
+        // --- 強弱ロジックの決定 ---
+        var intensity: BeatIntensity
         if currentNumerator == 0 {
-            intensity = .weak // 0拍子の時は常に弱拍
+            intensity = .weak
         } else if logicalBeat == 1 {
             intensity = .strong
-        } else if (logicalBeat - 1) % ticksPerMediumBeat == 0 {
+        } else if (logicalBeat - 1) % currentTicksPerMedium == 0 {
+            // 基準音符の節目
             intensity = .medium
         } else {
+            // 最小単位の刻み
             intensity = .weak
         }
         
-        onTick?(logicalBeat, intensity)
+        // --- 簡易モード（弱拍ミュート）の適用 ---
+        if simplified {
+            if intensity == .strong {
+                // 強拍はそのまま
+                onTick?(logicalBeat, .strong)
+            } else if intensity == .medium {
+                // 中拍を弱拍に格下げして鳴らす
+                onTick?(logicalBeat, .weak)
+            } else {
+                // 本来の弱拍は完全に無視（通知もしない）
+                // これによりUIも振動もスキップされます
+            }
+        } else {
+            // 通常モード
+            onTick?(logicalBeat, intensity)
+        }
     }
 }
