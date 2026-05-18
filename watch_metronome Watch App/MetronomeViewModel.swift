@@ -134,9 +134,10 @@ final class MetronomeViewModel {
     private func setupEngine() {
         engine.onTick = { [weak self] (beat: Int, intensity: BeatIntensity) in
             switch intensity {
-            case .strong: self?.hapticManager.playStrong()
-            case .medium: self?.hapticManager.playMedium()
-            case .weak:   self?.hapticManager.playWeak()
+            case .strong:  self?.hapticManager.playStrong()
+            case .medium:  self?.hapticManager.playMedium()
+            case .weak:    self?.hapticManager.playWeak()
+            case .silence: break // 何もしない
             }
             
             DispatchQueue.main.async {
