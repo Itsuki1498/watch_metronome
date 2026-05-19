@@ -88,15 +88,16 @@ final class MetronomeViewModel {
     }
     
     var isPlaying: Bool { engine.isPlaying }
+    
+    /// --- 同期された状態プロパティ ---
     var currentBeat: Int = 1
     var currentIntensity: BeatIntensity = .weak
+    var lastTickTime: DispatchTime = .now()
+    /// --------------------------
     
-    /// インジケーター描画のためのプロパティ
     var numerator: Int { engine.numerator }
     var denominator: Int { engine.denominator }
     var ticksPerMediumBeat: Int { engine.ticksPerMediumBeat }
-    
-    var lastTickTime: DispatchTime { engine.lastTickTime }
     var tickInterval: Double { engine.internalInterval }
     
     let denominatorOptions = [2, 4, 8, 16, 32]
@@ -128,7 +129,8 @@ final class MetronomeViewModel {
     }
     
     private func setupEngine() {
-        engine.onTick = { [weak self] (beat: Int, intensity: BeatIntensity) in
+        engine.onTick = { [weak self] (beat: Int, intensity: BeatIntensity, tickTime: DispatchTime) in
+            // 1. 振動はバックグラウンドスレッドで即座に実行
             if self?.isSimplifiedMode == true {
                 switch intensity {
                 case .strong: self?.hapticManager.playStrong()
@@ -144,9 +146,11 @@ final class MetronomeViewModel {
                 }
             }
             
+            // 2. UI状態を「一括で」メインスレッドに同期
             DispatchQueue.main.async {
                 self?.currentBeat = beat
                 self?.currentIntensity = intensity
+                self?.lastTickTime = tickTime
             }
         }
     }
@@ -161,7 +165,10 @@ final class MetronomeViewModel {
     // MARK: - Actions
     
     func togglePlayback() {
-        if engine.isPlaying { engine.stop() }
-        else { engine.start() }
+        if engine.isPlaying {
+            engine.stop()
+        } else {
+            engine.start()
+        }
     }
 }

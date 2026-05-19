@@ -14,20 +14,19 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
-            // 背景レイヤー: 精密な二重円環UI
+            // 背景レイヤー: 精密な同期UI
             TimelineView(.animation(minimumInterval: 0.016)) { context in
                 ModernPieIndicatorView(
                     viewModel: viewModel,
                     date: context.date
                 )
             }
-            .padding(6) // 画面端のセーフエリア確保
+            .padding(6)
             
             if !viewModel.isSystemReady {
                 ProgressView()
                     .tint(.orange)
             } else {
-                // 前面レイヤー: 操作UI
                 mainControlUI
             }
         }
@@ -40,7 +39,6 @@ struct ContentView: View {
         VStack(spacing: 0) {
             Spacer()
             
-            // 1. BPM & 音価セクション
             VStack(spacing: 1) {
                 HStack(alignment: .center, spacing: 2) {
                     settingItem(target: .noteValue, label: viewModel.currentNoteName, size: 14)
@@ -59,7 +57,6 @@ struct ContentView: View {
             }
             .padding(.top, 10)
             
-            // 2. 拍子セクション
             HStack(spacing: 12) {
                 HStack(spacing: 4) {
                     settingItem(target: .numerator, label: "\(viewModel.numerator)", size: 22)
@@ -87,7 +84,6 @@ struct ContentView: View {
             
             Spacer()
             
-            // 3. 起動ボタン
             Button {
                 viewModel.togglePlayback()
             } label: {
@@ -138,79 +134,69 @@ struct ModernPieIndicatorView: View {
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
             let radius = min(size.width, size.height) / 2
             let outerRadius = radius - 2
-            let innerRadius = outerRadius - 8
+            let innerRadius = outerRadius - 10
             
-            // 1. 背景のガイドライン（極薄の円）
+            // 1. 静的ベースライン
             context.stroke(
                 Circle().path(in: CGRect(x: center.x - outerRadius, y: center.y - outerRadius, width: outerRadius * 2, height: outerRadius * 2)),
                 with: .color(.white.opacity(0.05)),
-                lineWidth: 0.5
+                lineWidth: 1
             )
             
+            let isPlaying = viewModel.isPlaying
             let numerator = viewModel.numerator
             let totalTicks = Double(max(1, numerator))
-            let currentProgress = currentMeasureProgress()
-            let currentAngle = (currentProgress * 360.0) - 90.0
             
-            // 2. 外側リング: 分子に基づいた分割
-            if numerator == 0 {
-                // 0拍子の場合は1つの繋がったリング
-                drawArc(context: context, center: center, radius: outerRadius, start: -90, end: 270, color: .blue.opacity(0.1), width: 2)
-            } else {
+            // --- 同期された進捗計算 ---
+            let currentProgress = isPlaying ? currentMeasureProgress() : 0.0
+            let currentAngle = (currentProgress * 360.0) - 90.0
+            // ---------------------
+            
+            if numerator > 0 {
+                // 2. 外側リング
                 let stepAngle = 360.0 / totalTicks
                 for i in 0..<numerator {
                     let startAngle = Double(i) * stepAngle - 90
                     let endAngle = Double(i + 1) * stepAngle - 90
-                    let isCurrent = (i + 1) == viewModel.currentBeat
+                    let isCurrent = isPlaying && (i + 1) == viewModel.currentBeat
                     
                     // ベース
                     drawArc(context: context, center: center, radius: outerRadius, start: startAngle + 1, end: endAngle - 1, color: .white.opacity(0.05), width: 2)
                     
-                    // アクティブ（針が通過した部分）
+                    // アクティブ（追従消灯）
                     if isCurrent {
                         let effectiveStartAngle = max(startAngle, currentAngle)
                         if effectiveStartAngle < endAngle - 1 {
                             let color = colorForIntensity(viewModel.currentIntensity)
-                            // グロー効果の代用（少し太い線を薄く重ねる）
-                            drawArc(context: context, center: center, radius: outerRadius, start: effectiveStartAngle + 1, end: endAngle - 1, color: color.opacity(0.3), width: 6)
-                            drawArc(context: context, center: center, radius: outerRadius, start: effectiveStartAngle + 1, end: endAngle - 1, color: color, width: 3)
+                            drawArc(context: context, center: center, radius: outerRadius, start: effectiveStartAngle + 1, end: endAngle - 1, color: color, width: 6)
                         }
                     }
                 }
-            }
-            
-            // 3. 内側リング: 基準音符に基づいた分割 (パッキング)
-            let ticksPerMedium = Double(max(1, viewModel.ticksPerMediumBeat))
-            let mediumBeatCount = Int(ceil(totalTicks / ticksPerMedium))
-            let isDivideMeaningful = ticksPerMedium > 1 || numerator == 0 || (Double(numerator) / ticksPerMedium) > 1.0
-            
-            if isDivideMeaningful {
+                
+                // 3. 内側リング (中拍)
+                let ticksPerMedium = Double(max(1, viewModel.ticksPerMediumBeat))
+                let mediumBeatCount = Int(ceil(totalTicks / ticksPerMedium))
+                
                 for i in 0..<mediumBeatCount {
                     let startTick = Double(i) * ticksPerMedium
                     let endTick = min(totalTicks, Double(i + 1) * ticksPerMedium)
-                    
                     let startAngle = (startTick / totalTicks) * 360.0 - 90.0
                     let endAngle = (endTick / totalTicks) * 360.0 - 90.0
                     
-                    // ベース
                     drawArc(context: context, center: center, radius: innerRadius, start: startAngle + 1.5, end: endAngle - 1.5, color: .cyan.opacity(0.05), width: 1.5)
                     
-                    // アクティブ
-                    let isCurrentRange = currentAngle >= startAngle && currentAngle < endAngle
-                    if isCurrentRange {
+                    if isPlaying && currentAngle >= startAngle && currentAngle < endAngle {
                         let effectiveStartAngle = max(startAngle, currentAngle)
                         if effectiveStartAngle < endAngle - 1.5 {
-                            drawArc(context: context, center: center, radius: innerRadius, start: effectiveStartAngle + 1.5, end: endAngle - 1.5, color: .cyan.opacity(0.5), width: 3)
+                            drawArc(context: context, center: center, radius: innerRadius, start: effectiveStartAngle + 1.5, end: endAngle - 1.5, color: .cyan.opacity(0.4), width: 4)
                         }
                     }
                 }
             }
             
-            // 4. スキャン針と精密目盛り
-            if viewModel.isPlaying {
+            // 4. スキャン針
+            if isPlaying {
                 let angle = currentAngle
-                
-                // 針
                 var path = Path()
                 path.move(to: center)
                 let endPoint = CGPoint(
@@ -218,25 +204,15 @@ struct ModernPieIndicatorView: View {
                     y: center.y + outerRadius * sin(angle * .pi / 180)
                 )
                 path.addLine(to: endPoint)
-                
                 context.stroke(path, with: .color(.white), lineWidth: 1.5)
-                
-                // 針の先端のドット
-                let dotSize: CGFloat = 4
-                context.fill(
-                    Circle().path(in: CGRect(x: endPoint.x - dotSize/2, y: endPoint.y - dotSize/2, width: dotSize, height: dotSize)),
-                    with: .color(.white)
-                )
+                context.fill(Circle().path(in: CGRect(x: endPoint.x - 2, y: endPoint.y - 2, width: 4, height: 4)), with: .color(.white))
             }
         }
     }
     
     private func drawArc(context: GraphicsContext, center: CGPoint, radius: CGFloat, start: Double, end: Double, color: Color, width: CGFloat) {
         var path = Path()
-        path.addArc(center: center, radius: radius,
-                    startAngle: .degrees(start),
-                    endAngle: .degrees(end),
-                    clockwise: false)
+        path.addArc(center: center, radius: radius, startAngle: .degrees(start), endAngle: .degrees(end), clockwise: false)
         context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: width, lineCap: .butt))
     }
     
@@ -250,11 +226,10 @@ struct ModernPieIndicatorView: View {
     
     private func currentMeasureProgress() -> Double {
         let now = DispatchTime.now()
+        // ViewModel側で同期されたlastTickTimeを使用
         let elapsedSinceLastTick = Double(now.uptimeNanoseconds - viewModel.lastTickTime.uptimeNanoseconds) / 1_000_000_000.0
         let beatIndex = Double(viewModel.currentBeat - 1)
-        
-        let num = Double(max(1, viewModel.numerator))
-        let totalProgress = (beatIndex + (elapsedSinceLastTick / viewModel.tickInterval)) / num
+        let totalProgress = (beatIndex + (elapsedSinceLastTick / viewModel.tickInterval)) / Double(max(1, viewModel.numerator))
         return totalProgress.truncatingRemainder(dividingBy: 1.0)
     }
 }

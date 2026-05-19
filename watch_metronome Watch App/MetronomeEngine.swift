@@ -49,7 +49,8 @@ final class MetronomeEngine {
     private let queue = DispatchQueue(label: "com.watchmetronome.engine", qos: .userInteractive)
     private let lock = NSRecursiveLock()
     
-    var onTick: ((_ beat: Int, _ intensity: BeatIntensity) -> Void)?
+    /// 拍ごとの通知用クロージャ (拍数, 強さ, 発火時刻)
+    var onTick: ((_ beat: Int, _ intensity: BeatIntensity, _ tickTime: DispatchTime) -> Void)?
     
     // MARK: - Logic Constants (UI側で参照可能にする)
     
@@ -109,6 +110,7 @@ final class MetronomeEngine {
     }
     
     private func tick() {
+        let tickTime = DispatchTime.now()
         lock.lock()
         guard isPlaying else {
             lock.unlock()
@@ -117,7 +119,7 @@ final class MetronomeEngine {
         
         tickCount += 1
         let currentTick = tickCount
-        lastTickTime = .now()
+        lastTickTime = tickTime
         
         let currentNumerator = numerator
         let currentTicksPerMedium = ticksPerMediumBeat
@@ -129,7 +131,6 @@ final class MetronomeEngine {
         
         var intensity: BeatIntensity
         if currentNumerator == 0 {
-            // 0拍子の場合は強拍を作らず、全てを弱拍（または基準音符の節目なら中拍）として扱う
             if (currentTick - 1) % currentTicksPerMedium == 0 {
                 intensity = .medium
             } else {
@@ -145,14 +146,14 @@ final class MetronomeEngine {
         
         if simplified {
             if intensity == .strong {
-                onTick?(logicalBeat, .strong)
+                onTick?(logicalBeat, .strong, tickTime)
             } else if intensity == .medium {
-                onTick?(logicalBeat, .medium)
+                onTick?(logicalBeat, .medium, tickTime)
             } else {
-                onTick?(logicalBeat, .silence)
+                onTick?(logicalBeat, .silence, tickTime)
             }
         } else {
-            onTick?(logicalBeat, intensity)
+            onTick?(logicalBeat, intensity, tickTime)
         }
     }
 }
