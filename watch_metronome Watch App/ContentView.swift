@@ -124,6 +124,7 @@ struct ContentView: View {
             }
             .focusable()
             .focused($focusedField, equals: target)
+            .animation(.easeInOut(duration: 0.1), value: focusedField)
     }
 }
 
@@ -140,10 +141,11 @@ struct ModernPieIndicatorView: View {
             
             let isPlaying = viewModel.isPlaying
             
-            // --- 精密な同期計算 (フリッカー防止ガード) ---
-            let currentProgress = isPlaying ? currentMeasureProgress() : 0.0
-            // 360度に達した瞬間に0に戻る際の不連続性を考慮
-            let currentAngle = (currentProgress * 359.99) - 90.0
+            // --- 修正：進捗計算を境界条件から守る ---
+            let rawProgress = isPlaying ? currentMeasureProgress() : 0.0
+            // 針の位置 (0.0-1.0)
+            let needleProgress = rawProgress.truncatingRemainder(dividingBy: 1.0)
+            let currentAngle = (needleProgress * 360.0) - 90.0
             
             // 1. 静的ベース
             context.stroke(Circle().path(in: CGRect(x: center.x - outerRadius, y: center.y - outerRadius, width: outerRadius * 2, height: outerRadius * 2)), with: .color(.white.opacity(0.05)), lineWidth: 1)
@@ -151,49 +153,43 @@ struct ModernPieIndicatorView: View {
             if viewModel.numerator > 0 {
                 // 2. 外側リング (分母基準)
                 let outerCount = Double(max(1, viewModel.numerator))
-                let outerStep = 360.0 / outerCount
+                let outerStep = 1.0 / outerCount
                 for i in 0..<Int(outerCount) {
-                    let start = Double(i) * outerStep - 90
-                    let end = Double(i + 1) * outerStep - 90
+                    let rangeStart = Double(i) * outerStep
+                    let rangeEnd = Double(i + 1) * outerStep
                     
-                    drawArc(context: context, center: center, radius: outerRadius, start: start + 0.5, end: end - 0.5, color: .white.opacity(0.04), width: 2)
+                    // 背景
+                    drawArc(context: context, center: center, radius: outerRadius, start: rangeStart * 360 - 90.5, end: rangeEnd * 360 - 89.5, color: .white.opacity(0.04), width: 2)
                     
-                    // 針の現在位置に基づいたアクティブ描画
-                    if isPlaying {
-                        let effectiveStart = max(start, currentAngle)
-                        if effectiveStart < end - 0.5 && currentAngle >= start {
-                            let color = (i == 0) ? Color.orange : Color.cyan
-                            drawArc(context: context, center: center, radius: outerRadius, start: effectiveStart + 0.5, end: end - 0.5, color: color, width: 8)
-                        }
+                    // アクティブ判定（進捗率ベース）
+                    if isPlaying && needleProgress >= rangeStart && needleProgress < rangeEnd {
+                        let color = (i == 0) ? Color.orange : Color.cyan
+                        // 追従消灯：現在のセグメント内での進捗に応じて開始位置をずらす
+                        drawArc(context: context, center: center, radius: outerRadius, start: needleProgress * 360 - 90, end: rangeEnd * 360 - 90.5, color: color, width: 8)
                     }
                 }
                 
                 // 3. 内側リング (基準音符基準のパルス)
                 let innerCount = Double(max(1, viewModel.totalTicksInMeasure))
-                let innerStep = 360.0 / innerCount
+                let innerStep = 1.0 / innerCount
                 for i in 0..<Int(innerCount) {
-                    let start = Double(i) * innerStep - 90
-                    let end = Double(i + 1) * innerStep - 90
+                    let rangeStart = Double(i) * innerStep
+                    let rangeEnd = Double(i + 1) * innerStep
                     
-                    drawArc(context: context, center: center, radius: innerRadius, start: start + 1.5, end: end - 1.5, color: .blue.opacity(0.06), width: 1.5)
+                    drawArc(context: context, center: center, radius: innerRadius, start: rangeStart * 360 - 88.5, end: rangeEnd * 360 - 91.5, color: .blue.opacity(0.06), width: 1.5)
                     
-                    if isPlaying {
-                        let effectiveStart = max(start, currentAngle)
-                        if effectiveStart < end - 1.5 && currentAngle >= start {
-                            drawArc(context: context, center: center, radius: innerRadius, start: effectiveStart + 1.5, end: end - 1.5, color: .white.opacity(0.6), width: 5)
-                        }
+                    if isPlaying && needleProgress >= rangeStart && needleProgress < rangeEnd {
+                        drawArc(context: context, center: center, radius: innerRadius, start: needleProgress * 360 - 90, end: rangeEnd * 360 - 91, color: .white.opacity(0.6), width: 5)
                     }
                 }
             }
             
             // 4. スキャン針
             if isPlaying {
+                let angle = currentAngle
                 var path = Path()
                 path.move(to: center)
-                let endPoint = CGPoint(
-                    x: center.x + outerRadius * cos(currentAngle * .pi / 180),
-                    y: center.y + outerRadius * sin(currentAngle * .pi / 180)
-                )
+                let endPoint = CGPoint(x: center.x + outerRadius * cos(angle * .pi / 180), y: center.y + outerRadius * sin(angle * .pi / 180))
                 path.addLine(to: endPoint)
                 context.stroke(path, with: .color(.white.opacity(0.9)), lineWidth: 1.5)
                 context.fill(Circle().path(in: CGRect(x: endPoint.x - 2, y: endPoint.y - 2, width: 4, height: 4)), with: .color(.white))
@@ -202,6 +198,8 @@ struct ModernPieIndicatorView: View {
     }
     
     private func drawArc(context: GraphicsContext, center: CGPoint, radius: CGFloat, start: Double, end: Double, color: Color, width: CGFloat) {
+        // 角度の逆転を防ぐガード
+        guard end > start else { return }
         var path = Path()
         path.addArc(center: center, radius: radius, startAngle: .degrees(start), endAngle: .degrees(end), clockwise: false)
         context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: width, lineCap: .butt))
@@ -213,11 +211,15 @@ struct ModernPieIndicatorView: View {
         guard now >= last else { return 0.0 }
         let elapsed = Double(now.uptimeNanoseconds - last.uptimeNanoseconds) / 1_000_000_000.0
         
+        // 現在のパルスインデックス (0ベース)
         let beatIdx = viewModel.currentBeat - 1.0
-        let currentPulseProgress = (beatIdx * Double(viewModel.ticksPerOuterBeat)) + (elapsed / viewModel.tickInterval)
+        let pulseDuration = viewModel.tickInterval
+        
+        // 総パルス数の中での現在位置
+        let currentPulseProgress = (beatIdx * Double(viewModel.ticksPerOuterBeat)) + (elapsed / pulseDuration)
         let totalProgress = currentPulseProgress / Double(viewModel.totalTicksInMeasure)
         
-        return totalProgress.truncatingRemainder(dividingBy: 1.0)
+        return totalProgress // 呼び出し側で truncatingRemainder する
     }
 }
 
