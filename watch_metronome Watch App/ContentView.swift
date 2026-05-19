@@ -124,17 +124,12 @@ struct ContentView: View {
     
     // 音符表示コンポーネント
     private func noteValueDisplay(focused: Bool) -> some View {
-        HStack(spacing: 1) {
+        HStack(spacing: 0) {
             Image(viewModel.currentNote.imageName)
                 .resizable()
                 .renderingMode(.template) // 色指定可能にする
                 .aspectRatio(contentMode: .fit)
-                .frame(height: 22)
-            if viewModel.currentNote.isDotted {
-                Text(".")
-                    .font(.system(size: 20, weight: .black))
-                    .offset(y: 4)
-            }
+                .frame(height: 24) // 少し大きく表示
         }
         .foregroundStyle(focused ? Color.white : Color.primary.opacity(0.8))
         .padding(.horizontal, 6)

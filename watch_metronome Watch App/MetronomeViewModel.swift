@@ -110,13 +110,13 @@ final class MetronomeViewModel {
     
     let noteValueOptions: [NoteValue] = [
         NoteValue(name: "全", multiplier: 4.0, imageName: "note_whole", isDotted: false),
-        NoteValue(name: "付2", multiplier: 3.0, imageName: "note_half", isDotted: true),
+        NoteValue(name: "付2", multiplier: 3.0, imageName: "note_half_dotted", isDotted: true),
         NoteValue(name: "2", multiplier: 2.0, imageName: "note_half", isDotted: false),
-        NoteValue(name: "付4", multiplier: 1.5, imageName: "note_quarter", isDotted: true),
+        NoteValue(name: "付4", multiplier: 1.5, imageName: "note_quarter_dotted", isDotted: true),
         NoteValue(name: "4", multiplier: 1.0, imageName: "note_quarter", isDotted: false),
-        NoteValue(name: "付8", multiplier: 0.75, imageName: "note_eighth", isDotted: true),
+        NoteValue(name: "付8", multiplier: 0.75, imageName: "note_eighth_dotted", isDotted: true),
         NoteValue(name: "8", multiplier: 0.5, imageName: "note_eighth", isDotted: false),
-        NoteValue(name: "付16", multiplier: 0.375, imageName: "note_sixteenth", isDotted: true),
+        NoteValue(name: "付16", multiplier: 0.375, imageName: "note_sixteenth_dotted", isDotted: true),
         NoteValue(name: "16", multiplier: 0.25, imageName: "note_sixteenth", isDotted: false),
         NoteValue(name: "32", multiplier: 0.125, imageName: "note_32nd", isDotted: false)
     ]
