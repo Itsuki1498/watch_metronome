@@ -8,12 +8,12 @@
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    version="1.2"
-   width="3.782058mm"
+   width="2.4426448mm"
    height="7.1205735mm"
-   viewBox="0 0 2.1521999 4.0519995"
+   viewBox="0 0 1.3899998 4.0519995"
    id="svg2"
    inkscape:version="0.91 r13725"
-   sodipodi:docname="croche tête en bas.svg">
+   sodipodi:docname="blanche tête en bas.svg">
   <metadata
      id="metadata130">
     <rdf:RDF>
@@ -56,37 +56,31 @@
      fit-margin-left="0"
      fit-margin-right="0"
      fit-margin-bottom="0"
-     inkscape:zoom="0.63429568"
-     inkscape:cx="-205.02711"
-     inkscape:cy="-63.650461"
+     inkscape:zoom="0.89702955"
+     inkscape:cx="93.100319"
+     inkscape:cy="28.645075"
      inkscape:window-x="-8"
      inkscape:window-y="-8"
      inkscape:window-maximized="1"
      inkscape:current-layer="svg2" />
   <!-- Page: 1/1 -->
-  <path
-     transform="matrix(0.004,0,0,-0.004,1.3162,0.03999969)"
-     d="m 0,0 c 0,-198 209,-335 209,-533 0,-71 -16,-141 -42,-207 -5,-8 -12,-12 -19,-12 -13,0 -26,11 -23,27 26,61 42,126 42,192 0,104 -95,208 -167,283 l -16,0 0,250 16,0 z"
-     id="path68"
-     inkscape:connector-curvature="0"
-     style="fill:currentColor" />
   <rect
-     transform="translate(1.2512,1.9999997)"
+     transform="translate(1.3249951,1.9999997)"
      x="-0.064999998"
      y="-2"
      width="0.13"
-     height="3.3122001"
+     height="3.2386"
      ry="0.039999999"
-     id="rect70"
+     id="rect24"
      style="fill:currentColor" />
   <a
-     id="a72"
-     transform="translate(-94.8335,-6.3453003)">
+     id="a26"
+     transform="translate(-78.595105,-6.3453003)">
     <path
-       transform="matrix(0.004,0,0,-0.004,94.8335,9.8453)"
-       d="m 220,138 c 56,0 109,-29 109,-91 0,-72 -56,-121 -103,-149 -36,-21 -76,-36 -117,-36 -56,0 -109,29 -109,91 0,72 56,121 103,149 36,21 76,36 117,36 z"
-       id="path74"
+       transform="matrix(0.004,0,0,-0.004,78.5951,9.8453)"
+       d="m 315,65 c 0,24 -21,41 -42,41 -4,0 -8,0 -12,-1 C 230,96 184,65 147,41 110,17 63,-12 43,-37 36,-45 32,-55 32,-65 c 0,-24 21,-41 42,-41 4,0 8,0 12,1 31,9 78,40 115,64 37,24 84,53 104,78 7,8 10,18 10,28 z m -51,72 c 47,0 83,-21 83,-72 0,-19 -4,-37 -10,-56 -12,-38 -32,-74 -65,-96 -54,-36 -113,-51 -188,-51 -47,0 -84,22 -84,73 0,19 5,37 11,56 12,38 31,74 64,96 54,36 114,50 189,50 z"
+       id="path28"
        inkscape:connector-curvature="0"
        style="fill:currentColor" />
-  </a>
+  
 </svg>

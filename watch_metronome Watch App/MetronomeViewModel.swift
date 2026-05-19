@@ -110,7 +110,7 @@ final class MetronomeViewModel {
     let denominatorOptions = [2, 4, 8, 16, 32]
     
     let noteValueOptions: [NoteValue] = [
-        NoteValue(name: "全", multiplier: 4.0, imageName: "note_whole", isDotted: false, displayHeight: 14),
+        NoteValue(name: "全", multiplier: 4.0, imageName: "note_whole", isDotted: false, displayHeight: 10),
         NoteValue(name: "付2", multiplier: 3.0, imageName: "note_half_dotted", isDotted: true, displayHeight: 24),
         NoteValue(name: "2", multiplier: 2.0, imageName: "note_half", isDotted: false, displayHeight: 24),
         NoteValue(name: "付4", multiplier: 1.5, imageName: "note_quarter_dotted", isDotted: true, displayHeight: 24),
