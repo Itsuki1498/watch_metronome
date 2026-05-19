@@ -12,8 +12,8 @@ import WatchKit
 /// 拍の強さ
 enum BeatIntensity {
     case strong   // 強拍 (1拍目)
-    case medium   // 中拍 (基準音符の節目)
-    case weak     // 弱拍 (最小単位の刻み)
+    case medium   // 中拍 (分母基準のメイン拍 2, 3, 4...)
+    case weak     // 弱拍 (基準音符基準の裏拍など)
     case silence  // 無音 (簡易モードでのスキップ用)
 }
 
@@ -35,7 +35,6 @@ final class MetronomeEngine {
         didSet { updateConstants() }
     }
     
-    /// 四分音符を 1.0 とした基準音価の倍率
     var referenceNoteMultiplier: Double = 1.0 {
         didSet { updateConstants() }
     }
@@ -50,28 +49,36 @@ final class MetronomeEngine {
     private let queue = DispatchQueue(label: "com.watchmetronome.engine", qos: .userInteractive)
     private let lock = NSRecursiveLock()
     
-    var onTick: ((_ beat: Int, _ intensity: BeatIntensity, _ tickTime: DispatchTime) -> Void)?
+    var onTick: ((_ beat: Double, _ intensity: BeatIntensity, _ tickTime: DispatchTime) -> Void)?
     
     // MARK: - Logic Constants (UI側で参照可能にする)
     
-    /// 最小単位（denominator）が刻まれる間隔（秒）
+    /// 最小単位（パルス）が刻まれる間隔（秒）
     private(set) var internalInterval: Double = 0.5
-    /// 基準音符（BPMの単位）が最小単位何個分か
-    private(set) var ticksPerMediumBeat: Int = 1
+    
+    /// 1小節の中に最小単位がいくつ入るか
+    private(set) var totalTicksInMeasure: Int = 4
+    
+    /// 外側リング（分母基準）の1セグメントが、最小単位何個分か
+    private(set) var ticksPerOuterBeat: Int = 1
 
     private func updateConstants() {
-        // 1. 最小単位（分母）の音価（例: 8分音符なら 0.5）
-        let unitNoteValue = 4.0 / Double(denominator)
+        // 1. 最小単位（パルス）の決定
+        // 分母(Denom)と基準音符(Ref)のうち、短い方を最小の刻み単位とする
+        let unitDenom = 4.0 / Double(denominator)
+        let unitRef = referenceNoteMultiplier
+        let pulseUnit = min(unitDenom, unitRef)
         
-        // 2. 基準音符の中に最小単位がいくつ入るか（中拍の間隔）
-        // 例: 基準が付点4分(1.5)、分母が8(0.5) のとき 1.5 / 0.5 = 3個
-        ticksPerMediumBeat = max(1, Int(round(referenceNoteMultiplier / unitNoteValue)))
+        // 2. 1小節内の総パルス数
+        // (分母音価 * 分子) / 最小パルス
+        totalTicksInMeasure = max(1, Int(round((unitDenom * Double(numerator)) / pulseUnit)))
         
-        // 3. 内部BPMの計算
-        // 基準音符が1分間に BPM回 鳴るということは、1つの中拍の間隔は 60.0 / BPM 秒。
-        // 最小単位の間隔は、それを ticksPerMediumBeat で割ったもの。
-        let mediumBeatInterval = 60.0 / Double(bpm)
-        internalInterval = mediumBeatInterval / Double(ticksPerMediumBeat)
+        // 3. 外側ビート（分母基準）1拍あたりのパルス数
+        ticksPerOuterBeat = max(1, Int(round(unitDenom / pulseUnit)))
+        
+        // 4. タイマー間隔 (BPMは基準音符が1分間に鳴る回数)
+        // 1パルスの時間 = (60 / BPM) * (最小パルス / 基準音符)
+        internalInterval = (60.0 / Double(bpm)) * (pulseUnit / unitRef)
         
         if isPlaying { updateTimerSchedule(isRestart: true) }
     }
@@ -87,7 +94,6 @@ final class MetronomeEngine {
         tickCount = 0
         updateConstants()
         
-        // 最初の1拍目が100ms後に鳴るように予定を立てる
         let deadline = DispatchTime.now() + .milliseconds(100)
         lastTickTime = deadline
         
@@ -112,11 +118,8 @@ final class MetronomeEngine {
     
     private func updateTimerSchedule(isRestart: Bool) {
         guard isPlaying else { return }
-        
-        // 現在の周期を壊さないよう、次の予定時刻を計算
         let nextTime = lastTickTime + internalInterval
         let deadline = nextTime < .now() ? .now() : nextTime
-        
         timer?.schedule(deadline: deadline, repeating: internalInterval, leeway: .nanoseconds(0))
     }
     
@@ -132,35 +135,29 @@ final class MetronomeEngine {
         let currentTick = tickCount
         lastTickTime = tickTime
         
-        let currentNumerator = numerator
-        let currentTicksPerMedium = ticksPerMediumBeat
+        let totalTicks = totalTicksInMeasure
+        let outerStep = ticksPerOuterBeat
         let simplified = isSimplifiedMode
         lock.unlock()
         
-        let totalTicksInMeasure = max(1, currentNumerator)
-        let logicalBeat = ((currentTick - 1) % totalTicksInMeasure) + 1
+        // 論理的な拍（1, 1.5, 2... のように表現するためにDoubleを使用）
+        // 最小単位のインデックス (0 〜 totalTicks-1)
+        let tickIndex = (currentTick - 1) % totalTicks
+        let logicalBeat = Double(tickIndex) / Double(outerStep) + 1.0
         
         // 強弱判定
         var intensity: BeatIntensity
-        if currentNumerator == 0 {
-            intensity = (currentTick - 1) % currentTicksPerMedium == 0 ? .medium : .weak
-        } else if logicalBeat == 1 {
-            intensity = .strong
-        } else if (logicalBeat - 1) % currentTicksPerMedium == 0 {
-            intensity = .medium
+        if tickIndex == 0 {
+            intensity = .strong // 1拍目
+        } else if tickIndex % outerStep == 0 {
+            intensity = .medium // 2, 3, 4拍目
         } else {
-            intensity = .weak
+            intensity = .weak   // それ以外のパルス（裏拍など）
         }
         
         // 通知
-        if simplified {
-            if intensity == .strong {
-                onTick?(logicalBeat, .strong, tickTime)
-            } else if intensity == .medium {
-                onTick?(logicalBeat, .medium, tickTime)
-            } else {
-                onTick?(logicalBeat, .silence, tickTime)
-            }
+        if simplified && intensity == .weak {
+            onTick?(logicalBeat, .silence, tickTime)
         } else {
             onTick?(logicalBeat, intensity, tickTime)
         }

@@ -21,7 +21,7 @@ struct ContentView: View {
                     date: context.date
                 )
             }
-            .padding(1)
+            .padding(2)
             .ignoresSafeArea()
             
             if !viewModel.isSystemReady {
@@ -38,10 +38,10 @@ struct ContentView: View {
     
     private var mainControlUI: some View {
         VStack(spacing: 0) {
-            // 上部：BPM & 音価（Apple標準の洗練されたタイポグラフィ）
+            Spacer()
+            
             VStack(spacing: -2) {
-                HStack(alignment: .center, spacing: 4) {
-                    // 音価
+                HStack(alignment: .center, spacing: 6) {
                     settingItem(target: .noteValue, label: viewModel.currentNoteName, size: 18, hPadding: 6)
                         .digitalCrownRotation($viewModel.displayNoteValueIndex, from: 0, through: Double(viewModel.noteValueOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                     
@@ -49,11 +49,9 @@ struct ContentView: View {
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(.secondary.opacity(0.5))
                     
-                    // BPM (数字を少し小さく、細く)
                     settingItem(target: .bpm, label: "\(viewModel.bpm)", size: 50, hPadding: 4)
                         .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
-                // BPMラベル
                 Text("BPM")
                     .font(.system(size: 13, weight: .bold))
                     .kerning(1.5)
@@ -63,7 +61,6 @@ struct ContentView: View {
             
             Spacer()
             
-            // 中央：拍子設定
             HStack(spacing: 12) {
                 HStack(spacing: 4) {
                     settingItem(target: .numerator, label: "\(viewModel.numerator)", size: 24, hPadding: 6)
@@ -90,7 +87,6 @@ struct ContentView: View {
             
             Spacer()
             
-            // 下部：再生ボタン
             Button {
                 viewModel.togglePlayback()
             } label: {
@@ -106,10 +102,9 @@ struct ContentView: View {
         .padding(.horizontal)
     }
     
-    // 全ての項目で統一された選択UI
     private func settingItem(target: MetronomeViewModel.EditTarget, label: String, size: CGFloat = 20, hPadding: CGFloat = 6) -> some View {
         Text(label)
-            .font(.system(size: size, weight: .bold, design: .default).monospacedDigit()) // 少し細いBoldに変更
+            .font(.system(size: size, weight: .bold, design: .default).monospacedDigit())
             .foregroundStyle(focusedField == target ? .white : .primary.opacity(0.8))
             .padding(.horizontal, hPadding)
             .padding(.vertical, 2)
@@ -142,67 +137,60 @@ struct ModernPieIndicatorView: View {
         Canvas { context, size in
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
             let radius = min(size.width, size.height) / 2
-            let outerRadius = radius - 5
+            let outerRadius = radius - 2
             let innerRadius = outerRadius - 10
             
-            context.stroke(
-                Circle().path(in: CGRect(x: center.x - outerRadius, y: center.y - outerRadius, width: outerRadius * 2, height: outerRadius * 2)),
-                with: .color(.white.opacity(0.05)),
-                lineWidth: 1
-            )
+            // 静的ベース
+            context.stroke(Circle().path(in: CGRect(x: center.x - outerRadius, y: center.y - outerRadius, width: outerRadius * 2, height: outerRadius * 2)), with: .color(.white.opacity(0.05)), lineWidth: 1)
             
             let isPlaying = viewModel.isPlaying
-            let numerator = viewModel.numerator
-            let totalTicks = Double(max(1, numerator))
+            let totalTicks = Double(max(1, viewModel.totalTicksInMeasure))
             let currentProgress = isPlaying ? currentMeasureProgress() : 0.0
             let currentAngle = (currentProgress * 360.0) - 90.0
             
-            if numerator > 0 {
-                let stepAngle = 360.0 / totalTicks
-                for i in 0..<numerator {
-                    let startAngle = Double(i) * stepAngle - 90
-                    let endAngle = Double(i + 1) * stepAngle - 90
-                    let isCurrent = isPlaying && (i + 1) == viewModel.currentBeat
-                    
-                    drawArc(context: context, center: center, radius: outerRadius, start: startAngle + 1, end: endAngle - 1, color: .white.opacity(0.05), width: 2)
-                    
-                    if isCurrent {
-                        let effectiveStartAngle = max(startAngle, currentAngle)
-                        if effectiveStartAngle < endAngle - 1 {
-                            let color = colorForIntensity(viewModel.currentIntensity)
-                            drawArc(context: context, center: center, radius: outerRadius, start: effectiveStartAngle + 1, end: endAngle - 1, color: color, width: 8)
-                        }
-                    }
-                }
+            // 1. 外側リング (分母基準のメイン拍)
+            let outerCount = Double(max(1, viewModel.numerator))
+            let outerStepAngle = 360.0 / outerCount
+            for i in 0..<Int(outerCount) {
+                let start = Double(i) * outerStepAngle - 90
+                let end = Double(i + 1) * outerStepAngle - 90
+                let isCurrent = isPlaying && (currentAngle >= start && currentAngle < end)
                 
-                let ticksPerMedium = Double(max(1, viewModel.ticksPerMediumBeat))
-                let mediumBeatCount = Int(ceil(totalTicks / ticksPerMedium))
+                drawArc(context: context, center: center, radius: outerRadius, start: start + 0.5, end: end - 0.5, color: .white.opacity(0.04), width: 2)
                 
-                for i in 0..<mediumBeatCount {
-                    let startTick = Double(i) * ticksPerMedium
-                    let endTick = min(totalTicks, Double(i + 1) * ticksPerMedium)
-                    let startAngle = (startTick / totalTicks) * 360.0 - 90.0
-                    let endAngle = (endTick / totalTicks) * 360.0 - 90.0
-                    
-                    drawArc(context: context, center: center, radius: innerRadius, start: startAngle + 1.5, end: endAngle - 1.5, color: .cyan.opacity(0.05), width: 1.5)
-                    
-                    if isPlaying && currentAngle >= startAngle && currentAngle < endAngle {
-                        let effectiveStartAngle = max(startAngle, currentAngle)
-                        if effectiveStartAngle < endAngle - 1.5 {
-                            drawArc(context: context, center: center, radius: innerRadius, start: effectiveStartAngle + 1.5, end: endAngle - 1.5, color: .cyan.opacity(0.4), width: 5)
-                        }
+                if isCurrent {
+                    let effectiveStart = max(start, currentAngle)
+                    if effectiveStart < end - 0.5 {
+                        let color = (i == 0) ? Color.orange : Color.cyan
+                        drawArc(context: context, center: center, radius: outerRadius, start: effectiveStart + 0.5, end: end - 0.5, color: color, width: 8)
                     }
                 }
             }
             
+            // 2. 内側リング (基準音符基準のパルス)
+            let innerCount = totalTicks
+            let innerStepAngle = 360.0 / innerCount
+            for i in 0..<Int(innerCount) {
+                let start = Double(i) * innerStepAngle - 90
+                let end = Double(i + 1) * innerStepAngle - 90
+                let isCurrent = isPlaying && (currentAngle >= start && currentAngle < end)
+                
+                drawArc(context: context, center: center, radius: innerRadius, start: start + 1.5, end: end - 1.5, color: .blue.opacity(0.06), width: 1.5)
+                
+                if isCurrent {
+                    let effectiveStart = max(start, currentAngle)
+                    if effectiveStart < end - 1.5 {
+                        drawArc(context: context, center: center, radius: innerRadius, start: effectiveStart + 1.5, end: end - 1.5, color: .white.opacity(0.6), width: 5)
+                    }
+                }
+            }
+            
+            // 3. スキャン針
             if isPlaying {
                 let angle = currentAngle
                 var path = Path()
                 path.move(to: center)
-                let endPoint = CGPoint(
-                    x: center.x + outerRadius * cos(angle * .pi / 180),
-                    y: center.y + outerRadius * sin(angle * .pi / 180)
-                )
+                let endPoint = CGPoint(x: center.x + outerRadius * cos(angle * .pi / 180), y: center.y + outerRadius * sin(angle * .pi / 180))
                 path.addLine(to: endPoint)
                 context.stroke(path, with: .color(.white.opacity(0.9)), lineWidth: 1.5)
                 context.fill(Circle().path(in: CGRect(x: endPoint.x - 2, y: endPoint.y - 2, width: 4, height: 4)), with: .color(.white))
@@ -216,21 +204,22 @@ struct ModernPieIndicatorView: View {
         context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: width, lineCap: .butt))
     }
     
-    private func colorForIntensity(_ intensity: BeatIntensity) -> Color {
-        switch intensity {
-        case .strong: return .orange
-        case .medium: return .cyan
-        case .weak, .silence: return .blue
-        }
-    }
-    
     private func currentMeasureProgress() -> Double {
         let now = DispatchTime.now()
         let last = viewModel.lastTickTime
         guard now >= last else { return 0.0 }
-        let elapsedSinceLastTick = Double(now.uptimeNanoseconds - last.uptimeNanoseconds) / 1_000_000_000.0
-        let beatIndex = Double(viewModel.currentBeat - 1)
-        let totalProgress = (beatIndex + (elapsedSinceLastTick / viewModel.tickInterval)) / Double(max(1, viewModel.numerator))
+        let elapsed = Double(now.uptimeNanoseconds - last.uptimeNanoseconds) / 1_000_000_000.0
+        
+        // 現在のパルスインデックスを逆算
+        let beatIdx = viewModel.currentBeat - 1.0 // 0-based logical beat
+        let pulseDuration = viewModel.tickInterval
+        
+        // (論理的な拍の位置 * 外側の1拍あたりのパルス数 + 経過分) / 全パルス数
+        // ではなく、もっとシンプルに：
+        // (鳴った拍のインデックス + (鳴ってからの経過時間 / 1パルスの時間)) / 総パルス数
+        let currentPulseProgress = (beatIdx * Double(viewModel.ticksPerOuterBeat)) + (elapsed / pulseDuration)
+        let totalProgress = currentPulseProgress / Double(viewModel.totalTicksInMeasure)
+        
         return totalProgress.truncatingRemainder(dividingBy: 1.0)
     }
 }

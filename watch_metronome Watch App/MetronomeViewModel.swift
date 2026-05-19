@@ -90,14 +90,15 @@ final class MetronomeViewModel {
     var isPlaying: Bool { engine.isPlaying }
     
     /// --- 同期された状態プロパティ ---
-    var currentBeat: Int = 1
+    var currentBeat: Double = 1.0
     var currentIntensity: BeatIntensity = .weak
     var lastTickTime: DispatchTime = .now()
     
     /// --- エンジンの不変条件を一括公開 ---
     var numerator: Int { engine.numerator }
     var denominator: Int { engine.denominator }
-    var ticksPerMediumBeat: Int { engine.ticksPerMediumBeat }
+    var totalTicksInMeasure: Int { engine.totalTicksInMeasure }
+    var ticksPerOuterBeat: Int { engine.ticksPerOuterBeat }
     var tickInterval: Double { engine.internalInterval }
     /// --------------------------
     
@@ -130,24 +131,16 @@ final class MetronomeViewModel {
     }
     
     private func setupEngine() {
-        engine.onTick = { [weak self] (beat: Int, intensity: BeatIntensity, tickTime: DispatchTime) in
-            // 1. 振動はバックグラウンドスレッドで即座に実行
-            if self?.isSimplifiedMode == true {
-                switch intensity {
-                case .strong: self?.hapticManager.playStrong()
-                case .medium: self?.hapticManager.playMedium()
-                default: break
-                }
-            } else {
-                switch intensity {
-                case .strong:  self?.hapticManager.playStrong()
-                case .medium:  self?.hapticManager.playMedium()
-                case .weak:    self?.hapticManager.playWeak()
-                case .silence: break
-                }
+        engine.onTick = { [weak self] (beat: Double, intensity: BeatIntensity, tickTime: DispatchTime) in
+            // 振動
+            switch intensity {
+            case .strong:  self?.hapticManager.playStrong()
+            case .medium:  self?.hapticManager.playMedium()
+            case .weak:    self?.hapticManager.playWeak()
+            case .silence: break
             }
             
-            // 2. UI状態を完全に同期してメインスレッドへ
+            // UI状態の完全同期
             DispatchQueue.main.async {
                 self?.currentBeat = beat
                 self?.currentIntensity = intensity
@@ -177,8 +170,8 @@ final class MetronomeViewModel {
             engine.stop()
         } else {
             engine.start()
-            // 開始時に状態をクリーンに同期
-            self.currentBeat = 1
+            // 開始時に状態をリセット
+            self.currentBeat = 1.0
             self.currentIntensity = .strong
             self.lastTickTime = engine.lastTickTime
         }
