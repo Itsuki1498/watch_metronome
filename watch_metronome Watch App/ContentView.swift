@@ -14,7 +14,7 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
-            // 1. 背景レイヤー: 精密な二重円環
+            // 背景レイヤー: 精密な同期UI
             TimelineView(.animation(minimumInterval: 0.016)) { context in
                 ModernPieIndicatorView(
                     viewModel: viewModel,
@@ -28,7 +28,7 @@ struct ContentView: View {
                 ProgressView()
                     .tint(.orange)
             } else {
-                // 2. メイン操作UI
+                // 前面レイヤー: ⊂ ⊃ 型ボタンを備えた操作UI
                 mainControlUI
             }
         }
@@ -39,7 +39,9 @@ struct ContentView: View {
     
     private var mainControlUI: some View {
         VStack(spacing: 0) {
-            // 上部：BPM & 音価
+            Spacer()
+            
+            // 1. BPM & 音価セクション
             VStack(spacing: -2) {
                 HStack(alignment: .center, spacing: 6) {
                     settingItem(target: .noteValue, label: viewModel.currentNoteName, size: 18, hPadding: 6)
@@ -57,11 +59,11 @@ struct ContentView: View {
                     .kerning(1.5)
                     .foregroundStyle(.secondary.opacity(0.8))
             }
-            .padding(.top, 25)
+            .padding(.top, 28)
             
             Spacer()
             
-            // 中央：拍子設定
+            // 2. 拍子セクション
             HStack(spacing: 4) {
                 settingItem(target: .numerator, label: "\(viewModel.numerator)", size: 28, hPadding: 8)
                     .digitalCrownRotation($viewModel.displayNumerator, from: 0, through: 32, by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
@@ -76,44 +78,46 @@ struct ContentView: View {
             
             Spacer()
             
-            // 下部：左右に分散した透過ボタン
-            HStack {
-                // 左下：モード切り替え（透過円形）
+            // 3. 下部：⊂ ⊃ 型の透過ボタン
+            HStack(spacing: 20) {
+                // 左側：⊂ 型（モード切り替え：消音アイコン）
                 Button {
                     viewModel.isSimplifiedMode.toggle()
                     WKInterfaceDevice.current().play(.click)
                 } label: {
                     ZStack {
-                        Circle()
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(width: 38, height: 38)
-                        Image(systemName: "waveform.path.badge.minus")
+                        LeftUShape()
+                            .fill(Color.gray.opacity(0.15))
+                            .frame(width: 55, height: 40)
+                        Image(systemName: viewModel.isSimplifiedMode ? "speaker.slash.fill" : "speaker.fill")
                             .font(.system(size: 16))
                             .foregroundStyle(viewModel.isSimplifiedMode ? .orange : .blue)
+                            .offset(x: -4)
                     }
                 }
                 .buttonStyle(.plain)
                 
                 Spacer()
                 
-                // 右下：再生/停止（透過円形）
+                // 右側：⊃ 型（再生/停止：音量アイコン）
                 Button {
                     viewModel.togglePlayback()
                     WKInterfaceDevice.current().play(.click)
                 } label: {
                     ZStack {
-                        Circle()
-                            .fill(viewModel.isPlaying ? Color.red.opacity(0.2) : Color.green.opacity(0.2))
-                            .frame(width: 44, height: 44)
-                        Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
-                            .font(.system(size: 20))
+                        RightUShape()
+                            .fill(viewModel.isPlaying ? Color.red.opacity(0.15) : Color.green.opacity(0.15))
+                            .frame(width: 55, height: 40)
+                        Image(systemName: viewModel.isPlaying ? "speaker.wave.2.fill" : "play.fill")
+                            .font(.system(size: 18))
                             .foregroundStyle(viewModel.isPlaying ? .red : .green)
+                            .offset(x: 4)
                     }
                 }
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 10)
-            .padding(.bottom, 5)
+            .padding(.bottom, 10)
         }
         .padding(.horizontal)
     }
@@ -145,6 +149,32 @@ struct ContentView: View {
     }
 }
 
+/// ⊂ 型シェイプ（左側）
+struct LeftUShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let r = rect.height / 2
+        path.addArc(center: CGPoint(x: r, y: r), radius: r, startAngle: .degrees(90), endAngle: .degrees(270), clockwise: false)
+        path.addLine(to: CGPoint(x: rect.width, y: 0))
+        path.addLine(to: CGPoint(x: rect.width, y: rect.height))
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// ⊃ 型シェイプ（右側）
+struct RightUShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let r = rect.height / 2
+        path.addArc(center: CGPoint(x: rect.width - r, y: r), radius: r, startAngle: .degrees(270), endAngle: .degrees(450), clockwise: false)
+        path.addLine(to: CGPoint(x: 0, y: rect.height))
+        path.addLine(to: CGPoint(x: 0, y: 0))
+        path.closeSubpath()
+        return path
+    }
+}
+
 struct ModernPieIndicatorView: View {
     let viewModel: MetronomeViewModel
     let date: Date
@@ -165,7 +195,6 @@ struct ModernPieIndicatorView: View {
             context.stroke(Circle().path(in: CGRect(x: center.x - outerRadius, y: center.y - outerRadius, width: outerRadius * 2, height: outerRadius * 2)), with: .color(.white.opacity(0.05)), lineWidth: 1)
             
             if viewModel.numerator > 0 {
-                // 1. 外側リング (分母基準)
                 let outerCount = Double(max(1, viewModel.numerator))
                 let outerStep = 1.0 / outerCount
                 for i in 0..<Int(outerCount) {
@@ -183,7 +212,6 @@ struct ModernPieIndicatorView: View {
                     }
                 }
                 
-                // 2. 内側リング (基準音符準拠)
                 let totalTicks = Double(max(1, viewModel.totalTicksInMeasure))
                 let ticksPerRef = Double(max(1, viewModel.ticksPerRefNote))
                 let mediumBeatCount = Int(ceil(totalTicks / ticksPerRef))
@@ -193,9 +221,7 @@ struct ModernPieIndicatorView: View {
                     let endTick = min(totalTicks, Double(i + 1) * ticksPerRef)
                     let start = startTick / totalTicks
                     let end = endTick / totalTicks
-                    
                     drawArc(context: context, center: center, radius: innerRadius, start: start * 360 - 88.5, end: end * 360 - 91.5, color: .blue.opacity(0.06), width: 1.5)
-                    
                     if isPlaying && safeProgress >= start && safeProgress < end {
                         let segStart = max(start * 360 - 90, currentAngle)
                         let segEnd = end * 360 - 91
@@ -205,10 +231,20 @@ struct ModernPieIndicatorView: View {
                     }
                 }
             } else {
-                // 0拍子（フラット）
                 drawArc(context: context, center: center, radius: outerRadius, start: -90, end: 270, color: .white.opacity(0.04), width: 2)
                 if isPlaying {
                     drawArc(context: context, center: center, radius: outerRadius, start: currentAngle, end: 269.5, color: .cyan, width: 8)
+                }
+                let ticksPerRef = Double(max(1, viewModel.ticksPerRefNote))
+                let totalTicks = Double(max(1, viewModel.totalTicksInMeasure))
+                let mediumBeatCount = Int(ceil(totalTicks / ticksPerRef))
+                for i in 0..<mediumBeatCount {
+                    let start = (Double(i) * ticksPerRef) / totalTicks
+                    let end = min(totalTicks, (Double(i + 1) * ticksPerRef)) / totalTicks
+                    drawArc(context: context, center: center, radius: innerRadius, start: start * 360 - 88.5, end: end * 360 - 91.5, color: .blue.opacity(0.06), width: 1.5)
+                    if isPlaying && safeProgress >= start && safeProgress < end {
+                        drawArc(context: context, center: center, radius: innerRadius, start: max(start * 360 - 90, currentAngle), end: end * 360 - 91, color: .white.opacity(0.6), width: 5)
+                    }
                 }
             }
             
