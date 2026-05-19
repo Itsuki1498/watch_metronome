@@ -10,8 +10,10 @@ import Observation
 
 /// 音価の定義
 struct NoteValue: Hashable {
-    let name: String
-    let multiplier: Double
+    let name: String      // 内部識別用
+    let multiplier: Double // 倍率
+    let symbolName: String // SF Symbolsの名前
+    let isDotted: Bool     // 付点かどうか
 }
 
 /// メトロノームの画面状態と操作を管理するViewModel
@@ -89,11 +91,9 @@ final class MetronomeViewModel {
     
     var isPlaying: Bool { engine.isPlaying }
     
-    /// --- 同期された状態プロパティ ---
     var currentBeat: Int = 1
     var currentIntensity: BeatIntensity = .weak
     var lastTickTime: DispatchTime = .now()
-    /// --------------------------
     
     var numerator: Int { engine.numerator }
     var denominator: Int { engine.denominator }
@@ -103,20 +103,20 @@ final class MetronomeViewModel {
     let denominatorOptions = [2, 4, 8, 16, 32]
     
     let noteValueOptions: [NoteValue] = [
-        NoteValue(name: "全", multiplier: 4.0),
-        NoteValue(name: "付2", multiplier: 3.0),
-        NoteValue(name: "2", multiplier: 2.0),
-        NoteValue(name: "付4", multiplier: 1.5),
-        NoteValue(name: "4", multiplier: 1.0),
-        NoteValue(name: "付8", multiplier: 0.75),
-        NoteValue(name: "8", multiplier: 0.5),
-        NoteValue(name: "付16", multiplier: 0.375),
-        NoteValue(name: "16", multiplier: 0.25),
-        NoteValue(name: "32", multiplier: 0.125)
+        NoteValue(name: "全", multiplier: 4.0, symbolName: "circle", isDotted: false),
+        NoteValue(name: "付2", multiplier: 3.0, symbolName: "note", isDotted: true),
+        NoteValue(name: "2", multiplier: 2.0, symbolName: "note", isDotted: false),
+        NoteValue(name: "付4", multiplier: 1.5, symbolName: "quarter.note", isDotted: true),
+        NoteValue(name: "4", multiplier: 1.0, symbolName: "quarter.note", isDotted: false),
+        NoteValue(name: "付8", multiplier: 0.75, symbolName: "eighth.note", isDotted: true),
+        NoteValue(name: "8", multiplier: 0.5, symbolName: "eighth.note", isDotted: false),
+        NoteValue(name: "付16", multiplier: 0.375, symbolName: "sixteenth.note", isDotted: true),
+        NoteValue(name: "16", multiplier: 0.25, symbolName: "sixteenth.note", isDotted: false),
+        NoteValue(name: "32", multiplier: 0.125, symbolName: "thirtysecond.note", isDotted: false)
     ]
     
-    var currentNoteName: String {
-        noteValueOptions[noteValueIndex].name
+    var currentNote: NoteValue {
+        noteValueOptions[noteValueIndex]
     }
     
     // MARK: - Initialization
@@ -130,7 +130,6 @@ final class MetronomeViewModel {
     
     private func setupEngine() {
         engine.onTick = { [weak self] (beat: Int, intensity: BeatIntensity, tickTime: DispatchTime) in
-            // 1. 振動はバックグラウンドスレッドで即座に実行
             if self?.isSimplifiedMode == true {
                 switch intensity {
                 case .strong: self?.hapticManager.playStrong()
@@ -146,7 +145,6 @@ final class MetronomeViewModel {
                 }
             }
             
-            // 2. UI状態を「一括で」メインスレッドに同期
             DispatchQueue.main.async {
                 self?.currentBeat = beat
                 self?.currentIntensity = intensity
@@ -156,23 +154,26 @@ final class MetronomeViewModel {
     }
     
     private func syncNoteValueToDenominator() {
-        let targetName = "\(engine.denominator)"
-        if let index = noteValueOptions.firstIndex(where: { $0.name == targetName }) {
+        let targetMultiplier: Double
+        switch engine.denominator {
+        case 2: targetMultiplier = 2.0
+        case 4: targetMultiplier = 1.0
+        case 8: targetMultiplier = 0.5
+        case 16: targetMultiplier = 0.25
+        case 32: targetMultiplier = 0.125
+        default: targetMultiplier = 1.0
+        }
+        
+        if let index = noteValueOptions.firstIndex(where: { $0.multiplier == targetMultiplier }) {
             noteValueIndex = index
         }
     }
-    
-    // MARK: - Actions
     
     func togglePlayback() {
         if engine.isPlaying {
             engine.stop()
         } else {
             engine.start()
-            // 再生開始時にUI状態を即座に初期化し、フリッカー（一瞬変な場所が光る）を防ぐ
-            self.currentBeat = 1
-            self.currentIntensity = .strong
-            self.lastTickTime = engine.lastTickTime
         }
     }
 }

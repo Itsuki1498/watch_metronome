@@ -14,21 +14,20 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
-            // 1. 背景レイヤー: 画面いっぱいに広がる精密な円環
+            // 背景レイヤー: 力強い二重円環
             TimelineView(.animation(minimumInterval: 0.016)) { context in
                 ModernPieIndicatorView(
                     viewModel: viewModel,
                     date: context.date
                 )
             }
-            .padding(2) // 最小限の余白で画面最大まで広げる
+            .padding(1) // 画面端ギリギリまで広げる
             .ignoresSafeArea()
             
             if !viewModel.isSystemReady {
                 ProgressView()
                     .tint(.orange)
             } else {
-                // 2. 前面レイヤー: フローティング操作UI
                 mainControlUI
             }
         }
@@ -39,38 +38,48 @@ struct ContentView: View {
     
     private var mainControlUI: some View {
         VStack(spacing: 0) {
-            // 上部：BPM & 音価（少し透過させて背景を活かす）
-            VStack(spacing: 0) {
-                HStack(alignment: .center, spacing: 4) {
-                    settingItem(target: .noteValue, label: viewModel.currentNoteName, size: 14)
+            // 上部：BPM & 音価（大きく、力強く）
+            VStack(spacing: -2) {
+                HStack(alignment: .center, spacing: 6) {
+                    // 音符記号
+                    noteValueDisplay(focused: focusedField == .noteValue)
+                        .onTapGesture { focusedField = .noteValue }
+                        .focusable()
+                        .focused($focusedField, equals: .noteValue)
                         .digitalCrownRotation($viewModel.displayNoteValueIndex, from: 0, through: Double(viewModel.noteValueOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                     
                     Text("=")
-                        .font(.system(size: 10, weight: .black))
-                        .foregroundStyle(.orange.opacity(0.6))
+                        .font(.system(size: 14, weight: .black))
+                        .foregroundStyle(.orange.opacity(0.8))
                     
-                    settingItem(target: .bpm, label: "\(viewModel.bpm)", size: 48)
+                    // BPM
+                    Text("\(viewModel.bpm)")
+                        .font(.system(size: 56, weight: .black, design: .rounded))
+                        .foregroundStyle(focusedField == .bpm ? Color.accentColor : .primary)
+                        .onTapGesture { focusedField = .bpm }
+                        .focusable()
+                        .focused($focusedField, equals: .bpm)
                         .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
                 Text("BPM")
-                    .font(.system(size: 8, weight: .black))
-                    .foregroundStyle(.secondary.opacity(0.5))
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundStyle(.secondary.opacity(0.6))
             }
-            .padding(.top, 25) // ステータスバーとの兼ね合い
+            .padding(.top, 28)
             
             Spacer()
             
-            // 中央：拍子設定（コンパクトにまとめてリングの視認性を確保）
-            HStack(spacing: 10) {
-                HStack(spacing: 2) {
-                    settingItem(target: .numerator, label: "\(viewModel.numerator)", size: 20)
+            // 中央：拍子設定
+            HStack(spacing: 12) {
+                HStack(spacing: 4) {
+                    settingItem(target: .numerator, label: "\(viewModel.numerator)", size: 24)
                         .digitalCrownRotation($viewModel.displayNumerator, from: 0, through: 32, by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                     
                     Text("/")
-                        .font(.system(size: 14, weight: .ultraLight))
-                        .foregroundStyle(.secondary.opacity(0.4))
+                        .font(.system(size: 18, weight: .ultraLight))
+                        .foregroundStyle(.secondary.opacity(0.5))
                     
-                    settingItem(target: .denominator, label: "\(viewModel.denominator)", size: 20)
+                    settingItem(target: .denominator, label: "\(viewModel.denominator)", size: 24)
                         .digitalCrownRotation($viewModel.displayDenominatorIndex, from: 0, through: Double(viewModel.denominatorOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
                 
@@ -79,41 +88,69 @@ struct ContentView: View {
                     WKInterfaceDevice.current().play(.click)
                 } label: {
                     Image(systemName: viewModel.isSimplifiedMode ? "eye.slash.fill" : "eye.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(viewModel.isSimplifiedMode ? .orange : .blue.opacity(0.6))
+                        .font(.system(size: 14))
+                        .foregroundStyle(viewModel.isSimplifiedMode ? .orange : .blue.opacity(0.8))
                 }
                 .buttonStyle(.plain)
             }
             
             Spacer()
             
-            // 下部：再生ボタン（角丸を強くしてモダンに）
+            // 下部：再生ボタン
             Button {
                 viewModel.togglePlayback()
             } label: {
                 Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
-                    .font(.title3)
+                    .font(.title2)
             }
             .frame(width: 60, height: 32)
-            .tint(viewModel.isPlaying ? .red.opacity(0.7) : .green.opacity(0.7))
+            .tint(viewModel.isPlaying ? .red.opacity(0.8) : .green.opacity(0.8))
             .buttonStyle(.borderedProminent)
             .clipShape(Capsule())
-            .padding(.bottom, 15)
+            .padding(.bottom, 12)
         }
+        .padding(.horizontal)
+    }
+    
+    // 音符記号の表示
+    private func noteValueDisplay(focused: Bool) -> some View {
+        HStack(spacing: 1) {
+            Image(systemName: viewModel.currentNote.symbolName)
+                .font(.system(size: 20, weight: .bold))
+            if viewModel.currentNote.isDotted {
+                Text(".")
+                    .font(.system(size: 24, weight: .bold))
+                    .offset(y: -4)
+            }
+        }
+        .foregroundStyle(focused ? Color.white : Color.primary.opacity(0.8))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            ZStack {
+                if focused {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.blue.opacity(0.25))
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.cyan, lineWidth: 1.5)
+                }
+            }
+        )
     }
     
     private func settingItem(target: MetronomeViewModel.EditTarget, label: String, size: CGFloat = 20) -> some View {
         Text(label)
             .font(.system(size: size, weight: .black, design: .rounded))
-            .foregroundStyle(focusedField == target ? .white : .primary.opacity(0.7))
-            .padding(.horizontal, 4)
+            .foregroundStyle(focusedField == target ? .white : .primary.opacity(0.8))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
             .background(
                 ZStack {
                     if focusedField == target {
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.blue.opacity(0.2))
+                            .fill(Color.blue.opacity(0.25))
                         RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.cyan.opacity(0.5), lineWidth: 1)
+                            .stroke(Color.cyan, lineWidth: 1.5)
                     }
                 }
             )
@@ -135,37 +172,35 @@ struct ModernPieIndicatorView: View {
         Canvas { context, size in
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
             let radius = min(size.width, size.height) / 2
-            let outerRadius = radius - 2 // 画面端ギリギリまで広げる
-            let innerRadius = outerRadius - 6 // リングの幅を少し細くして洗練させる
+            let outerRadius = radius - 3
+            let innerRadius = outerRadius - 12 // リング間の距離を少し広げる
             
             let isPlaying = viewModel.isPlaying
             let numerator = viewModel.numerator
             let totalTicks = Double(max(1, numerator))
-            
             let currentProgress = isPlaying ? currentMeasureProgress() : 0.0
             let currentAngle = (currentProgress * 360.0) - 90.0
             
             if numerator > 0 {
-                // 1. 外側リング: 画面のフレームのように配置
+                // 1. 外側リング (太く: 8pt)
                 let stepAngle = 360.0 / totalTicks
                 for i in 0..<numerator {
                     let startAngle = Double(i) * stepAngle - 90
                     let endAngle = Double(i + 1) * stepAngle - 90
                     let isCurrent = isPlaying && (i + 1) == viewModel.currentBeat
                     
-                    // 背景の微かな刻み
-                    drawArc(context: context, center: center, radius: outerRadius, start: startAngle + 0.5, end: endAngle - 0.5, color: .white.opacity(0.03), width: 1.5)
+                    drawArc(context: context, center: center, radius: outerRadius, start: startAngle + 0.5, end: endAngle - 0.5, color: .white.opacity(0.04), width: 2)
                     
                     if isCurrent {
                         let effectiveStartAngle = max(startAngle, currentAngle)
                         if effectiveStartAngle < endAngle - 0.5 {
                             let color = colorForIntensity(viewModel.currentIntensity)
-                            drawArc(context: context, center: center, radius: outerRadius, start: effectiveStartAngle + 0.5, end: endAngle - 0.5, color: color, width: 5)
+                            drawArc(context: context, center: center, radius: outerRadius, start: effectiveStartAngle + 0.5, end: endAngle - 0.5, color: color, width: 8) // 太さアップ
                         }
                     }
                 }
                 
-                // 2. 内側リング: 基準音符（中拍）
+                // 2. 内側リング (太く: 5pt)
                 let ticksPerMedium = Double(max(1, viewModel.ticksPerMediumBeat))
                 let mediumBeatCount = Int(ceil(totalTicks / ticksPerMedium))
                 
@@ -175,16 +210,18 @@ struct ModernPieIndicatorView: View {
                     let startAngle = (startTick / totalTicks) * 360.0 - 90.0
                     let endAngle = (endTick / totalTicks) * 360.0 - 90.0
                     
+                    drawArc(context: context, center: center, radius: innerRadius, start: startAngle + 1.5, end: endAngle - 1.5, color: .cyan.opacity(0.06), width: 1.5)
+                    
                     if isPlaying && currentAngle >= startAngle && currentAngle < endAngle {
                         let effectiveStartAngle = max(startAngle, currentAngle)
-                        if effectiveStartAngle < endAngle - 1 {
-                            drawArc(context: context, center: center, radius: innerRadius, start: effectiveStartAngle + 1, end: endAngle - 1, color: .cyan.opacity(0.3), width: 3)
+                        if effectiveStartAngle < endAngle - 1.5 {
+                            drawArc(context: context, center: center, radius: innerRadius, start: effectiveStartAngle + 1.5, end: endAngle - 1.5, color: .cyan.opacity(0.5), width: 5) // 太さアップ
                         }
                     }
                 }
             }
             
-            // 3. 極細のスキャン針
+            // 3. スキャン針
             if isPlaying {
                 let angle = currentAngle
                 var path = Path()
@@ -194,8 +231,8 @@ struct ModernPieIndicatorView: View {
                     y: center.y + outerRadius * sin(angle * .pi / 180)
                 )
                 path.addLine(to: endPoint)
-                context.stroke(path, with: .color(.white.opacity(0.8)), lineWidth: 1.0)
-                context.fill(Circle().path(in: CGRect(x: endPoint.x - 1.5, y: endPoint.y - 1.5, width: 3, height: 3)), with: .color(.white))
+                context.stroke(path, with: .color(.white.opacity(0.9)), lineWidth: 1.5)
+                context.fill(Circle().path(in: CGRect(x: endPoint.x - 2, y: endPoint.y - 2, width: 4, height: 4)), with: .color(.white))
             }
         }
     }
