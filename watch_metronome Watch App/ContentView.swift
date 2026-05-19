@@ -14,6 +14,7 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
+            // 背景レイヤー: 精密な同期UI
             TimelineView(.animation(minimumInterval: 0.016)) { context in
                 ModernPieIndicatorView(
                     viewModel: viewModel,
@@ -136,53 +137,58 @@ struct ModernPieIndicatorView: View {
         Canvas { context, size in
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
             let radius = min(size.width, size.height) / 2
-            let outerRadius = radius - 3
-            let innerRadius = outerRadius - 12
+            let outerRadius = radius - 2
+            let innerRadius = outerRadius - 10
             
             let isPlaying = viewModel.isPlaying
             
-            // --- 修正：進捗計算を境界条件から守る (不連続性の物理的排除) ---
+            // --- 精密な同期計算 (境界フリッカー防止強化) ---
             let rawProgress = isPlaying ? currentMeasureProgress() : 0.0
-            let needleProgress = rawProgress.truncatingRemainder(dividingBy: 1.0)
+            // 0.0 〜 0.999... に収め、1.0（360度）ジャストを避けることでチラつきを物理的にカット
+            let needleProgress = min(0.9999, rawProgress.truncatingRemainder(dividingBy: 1.0))
+            let currentAngle = (needleProgress * 360.0) - 90.0
             
-            // フリッカー防止：1.0(360度)の直前で0に飛ばないよう微小なマージン
-            let safeProgress = needleProgress < 0.0001 ? 0.0 : min(0.9999, needleProgress)
-            let currentAngle = (safeProgress * 360.0) - 90.0
-            
+            // 静的ベース
             context.stroke(Circle().path(in: CGRect(x: center.x - outerRadius, y: center.y - outerRadius, width: outerRadius * 2, height: outerRadius * 2)), with: .color(.white.opacity(0.05)), lineWidth: 1)
             
             if viewModel.numerator > 0 {
-                // 2. 外側リング (分母基準)
+                // 1. 外側リング (分母基準の拍)
                 let outerCount = Double(max(1, viewModel.numerator))
                 let outerStep = 1.0 / outerCount
                 for i in 0..<Int(outerCount) {
-                    let rangeStart = Double(i) * outerStep
-                    let rangeEnd = Double(i + 1) * outerStep
+                    let start = Double(i) * outerStep
+                    let end = Double(i + 1) * outerStep
                     
-                    drawArc(context: context, center: center, radius: outerRadius, start: rangeStart * 360 - 89.5, end: rangeEnd * 360 - 90.5, color: .white.opacity(0.04), width: 2)
+                    drawArc(context: context, center: center, radius: outerRadius, start: start * 360 - 89.5, end: end * 360 - 90.5, color: .white.opacity(0.04), width: 2)
                     
-                    if isPlaying && safeProgress >= rangeStart && safeProgress < rangeEnd {
+                    if isPlaying && needleProgress >= start && needleProgress < end {
                         let color = (i == 0) ? Color.orange : Color.cyan
-                        let segStart = safeProgress * 360 - 90
-                        let segEnd = rangeEnd * 360 - 90.5
+                        // 追従消灯：境界条件でマイナスにならないよう微小な余白
+                        let segStart = max(start * 360 - 90, currentAngle)
+                        let segEnd = end * 360 - 90.5
                         if segStart < segEnd {
                             drawArc(context: context, center: center, radius: outerRadius, start: segStart, end: segEnd, color: color, width: 8)
                         }
                     }
                 }
                 
-                // 3. 内側リング (基準音符パルス)
-                let innerCount = Double(max(1, viewModel.totalTicksInMeasure))
-                let innerStep = 1.0 / innerCount
-                for i in 0..<Int(innerCount) {
-                    let rangeStart = Double(i) * innerStep
-                    let rangeEnd = Double(i + 1) * innerStep
+                // 2. 内側リング (基準音符の長さに準拠)
+                let totalTicks = Double(max(1, viewModel.totalTicksInMeasure))
+                let ticksPerRef = Double(max(1, viewModel.ticksPerRefNote))
+                let mediumBeatCount = Int(ceil(totalTicks / ticksPerRef))
+                
+                for i in 0..<mediumBeatCount {
+                    let startTick = Double(i) * ticksPerRef
+                    let endTick = min(totalTicks, Double(i + 1) * ticksPerRef)
                     
-                    drawArc(context: context, center: center, radius: innerRadius, start: rangeStart * 360 - 88.5, end: rangeEnd * 360 - 91.5, color: .blue.opacity(0.06), width: 1.5)
+                    let start = startTick / totalTicks
+                    let end = endTick / totalTicks
                     
-                    if isPlaying && safeProgress >= rangeStart && safeProgress < rangeEnd {
-                        let segStart = safeProgress * 360 - 90
-                        let segEnd = rangeEnd * 360 - 91
+                    drawArc(context: context, center: center, radius: innerRadius, start: start * 360 - 88.5, end: end * 360 - 91.5, color: .blue.opacity(0.06), width: 1.5)
+                    
+                    if isPlaying && needleProgress >= start && needleProgress < end {
+                        let segStart = max(start * 360 - 90, currentAngle)
+                        let segEnd = end * 360 - 91
                         if segStart < segEnd {
                             drawArc(context: context, center: center, radius: innerRadius, start: segStart, end: segEnd, color: .white.opacity(0.6), width: 5)
                         }
@@ -190,10 +196,12 @@ struct ModernPieIndicatorView: View {
                 }
             }
             
+            // 3. スキャン針
             if isPlaying {
+                let angle = currentAngle
                 var path = Path()
                 path.move(to: center)
-                let endPoint = CGPoint(x: center.x + outerRadius * cos(currentAngle * .pi / 180), y: center.y + outerRadius * sin(currentAngle * .pi / 180))
+                let endPoint = CGPoint(x: center.x + outerRadius * cos(angle * .pi / 180), y: center.y + outerRadius * sin(angle * .pi / 180))
                 path.addLine(to: endPoint)
                 context.stroke(path, with: .color(.white.opacity(0.9)), lineWidth: 1.5)
                 context.fill(Circle().path(in: CGRect(x: endPoint.x - 2, y: endPoint.y - 2, width: 4, height: 4)), with: .color(.white))
