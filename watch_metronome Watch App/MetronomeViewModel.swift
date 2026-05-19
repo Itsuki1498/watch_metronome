@@ -12,6 +12,8 @@ import Observation
 struct NoteValue: Hashable {
     let name: String
     let multiplier: Double
+    let imageName: String
+    let isDotted: Bool
 }
 
 /// メトロノームの画面状態と操作を管理するViewModel
@@ -107,22 +109,22 @@ final class MetronomeViewModel {
     let denominatorOptions = [2, 4, 8, 16, 32]
     
     let noteValueOptions: [NoteValue] = [
-        NoteValue(name: "全", multiplier: 4.0),
-        NoteValue(name: "付2", multiplier: 3.0),
-        NoteValue(name: "2", multiplier: 2.0),
-        NoteValue(name: "付4", multiplier: 1.5),
-        NoteValue(name: "4", multiplier: 1.0),
-        NoteValue(name: "付8", multiplier: 0.75),
-        NoteValue(name: "8", multiplier: 0.5),
-        NoteValue(name: "付16", multiplier: 0.375),
-        NoteValue(name: "16", multiplier: 0.25),
-        NoteValue(name: "32", multiplier: 0.125)
+        NoteValue(name: "全", multiplier: 4.0, imageName: "note_whole", isDotted: false),
+        NoteValue(name: "付2", multiplier: 3.0, imageName: "note_half", isDotted: true),
+        NoteValue(name: "2", multiplier: 2.0, imageName: "note_half", isDotted: false),
+        NoteValue(name: "付4", multiplier: 1.5, imageName: "note_quarter", isDotted: true),
+        NoteValue(name: "4", multiplier: 1.0, imageName: "note_quarter", isDotted: false),
+        NoteValue(name: "付8", multiplier: 0.75, imageName: "note_eighth", isDotted: true),
+        NoteValue(name: "8", multiplier: 0.5, imageName: "note_eighth", isDotted: false),
+        NoteValue(name: "付16", multiplier: 0.375, imageName: "note_sixteenth", isDotted: true),
+        NoteValue(name: "16", multiplier: 0.25, imageName: "note_sixteenth", isDotted: false),
+        NoteValue(name: "32", multiplier: 0.125, imageName: "note_32nd", isDotted: false)
     ]
     
     var validNoteValueOptions: [NoteValue] = []
     
-    var currentNoteName: String {
-        noteValueOptions[noteValueIndex].name
+    var currentNote: NoteValue {
+        noteValueOptions[noteValueIndex]
     }
     
     // MARK: - Initialization

@@ -39,24 +39,30 @@ struct ContentView: View {
     
     private var mainControlUI: some View {
         VStack(spacing: 0) {
-            // 上部：BPM & 音価
+            // 上部：BPM & 音価（Apple標準の洗練されたタイポグラフィ）
             VStack(spacing: -2) {
                 HStack(alignment: .center, spacing: 6) {
-                    settingItem(target: .noteValue, label: viewModel.currentNoteName, size: 18, hPadding: 6)
+                    // 音価（Wikimedia SVGグラフィック）
+                    noteValueDisplay(focused: focusedField == .noteValue)
+                        .onTapGesture { focusedField = .noteValue }
+                        .focusable()
+                        .focused($focusedField, equals: .noteValue)
                         .digitalCrownRotation($viewModel.displayNoteValueIndex, from: 0, through: Double(max(0, viewModel.validNoteValueOptions.count - 1)), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                     
                     Text("=")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(.secondary.opacity(0.5))
                     
-                    // BPM (数字を少し小さく、細く。枠をさらにタイトに: 3pt)
+                    // BPM
                     settingItem(target: .bpm, label: "\(viewModel.bpm)", size: 50, hPadding: 3)
                         .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
+                // BPMラベル（位置を少し下げて調整）
                 Text("BPM")
                     .font(.system(size: 13, weight: .bold))
                     .kerning(1.5)
                     .foregroundStyle(.secondary.opacity(0.8))
+                    .padding(.top, 4) // 指示通り少し下げる
             }
             .padding(.top, 25)
             
@@ -77,9 +83,8 @@ struct ContentView: View {
             
             Spacer()
             
-            // 下部：中央カプセル型ボタン（幅68に拡張）
+            // 下部：中央カプセル型ボタン
             HStack(spacing: 2) {
-                // 左側：モード切り替え
                 Button {
                     viewModel.nextRhythmMode()
                     WKInterfaceDevice.current().play(.click)
@@ -94,9 +99,8 @@ struct ContentView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .frame(width: 68, height: 40) // 幅を68に
+                .frame(width: 68, height: 40)
                 
-                // 右側：再生/停止
                 Button {
                     viewModel.togglePlayback()
                     WKInterfaceDevice.current().play(.click)
@@ -111,11 +115,40 @@ struct ContentView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .frame(width: 68, height: 40) // 幅を68に
+                .frame(width: 68, height: 40)
             }
-            .padding(.bottom, 5) // パディングを5に減らして位置を下げる
+            .padding(.bottom, 5)
         }
         .padding(.horizontal)
+    }
+    
+    // 音符表示コンポーネント
+    private func noteValueDisplay(focused: Bool) -> some View {
+        HStack(spacing: 1) {
+            Image(viewModel.currentNote.imageName)
+                .resizable()
+                .renderingMode(.template) // 色指定可能にする
+                .aspectRatio(contentMode: .fit)
+                .frame(height: 22)
+            if viewModel.currentNote.isDotted {
+                Text(".")
+                    .font(.system(size: 20, weight: .black))
+                    .offset(y: 4)
+            }
+        }
+        .foregroundStyle(focused ? Color.white : Color.primary.opacity(0.8))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(
+            ZStack {
+                if focused {
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(Color.blue.opacity(0.2))
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .stroke(Color.cyan, lineWidth: 1)
+                }
+            }
+        )
     }
     
     private func modeIcon(_ mode: RhythmMode) -> String {
@@ -131,7 +164,7 @@ struct ContentView: View {
             .font(.system(size: size, weight: .bold, design: .default).monospacedDigit())
             .foregroundStyle(focusedField == target ? .white : .primary.opacity(0.8))
             .padding(.horizontal, hPadding)
-            .padding(.vertical, 1) // 上下1ピクセルずつ削ってタイトにする
+            .padding(.vertical, 1)
             .background(
                 ZStack {
                     if focusedField == target {
