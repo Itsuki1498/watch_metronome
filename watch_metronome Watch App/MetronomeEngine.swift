@@ -12,9 +12,9 @@ import WatchKit
 /// 拍の強さ
 enum BeatIntensity {
     case strong   // 強拍 (1拍目)
-    case medium   // 中拍 (基準音符の節目)
-    case weak     // 弱拍 (最小単位の刻み)
-    case silence  // 無音 (簡易モードでのスキップ用)
+    case medium   // 中拍
+    case weak     // 弱拍
+    case silence  // 無音 (簡易モード用)
 }
 
 /// メトロノームのリズム生成を担うエンジン
@@ -62,17 +62,8 @@ final class MetronomeEngine {
         let unitDenom = 4.0 / Double(denominator)
         let unitRef = referenceNoteMultiplier
         
-        let possibleUnits: [Double] = [2.0, 1.0, 0.5, 0.25, 0.125]
-        var pulseUnit = unitDenom
-        for unit in possibleUnits {
-            let ratioDenom = unitDenom / unit
-            let ratioRef = unitRef / unit
-            if abs(ratioDenom - round(ratioDenom)) < 0.0001 && 
-               abs(ratioRef - round(ratioRef)) < 0.0001 {
-                pulseUnit = unit
-                break
-            }
-        }
+        // ベースとなる最小解像度 (32分音符)
+        let pulseUnit = 0.125 
         
         totalTicksInMeasure = max(1, Int(round((unitDenom * Double(numerator)) / pulseUnit)))
         ticksPerOuterBeat = max(1, Int(round(unitDenom / pulseUnit)))
@@ -139,25 +130,44 @@ final class MetronomeEngine {
         let currentTick = tickCount
         lastTickTime = tickTime
         
-        let currentNumerator = numerator
         let outerStep = ticksPerOuterBeat
         let refStep = ticksPerRefNote
         let simplified = isSimplifiedMode
+        let currentNumerator = numerator
+        
+        // 倍数関係の判定
+        let unitDenom = 4.0 / Double(denominator)
+        let unitRef = referenceNoteMultiplier
+        let isRefMultiple = (unitRef / unitDenom) >= 0.999 && abs((unitRef / unitDenom) - round(unitRef / unitDenom)) < 0.001
+        
         lock.unlock()
         
         let tickIndex = currentTick - 1
         let logicalBeat = Double(tickIndex) / Double(outerStep) + 1.0
         
-        // --- 修正：分子が0の時は強拍なし（全て中拍または弱拍） ---
+        // --- 音楽的階層ロジックの決定 ---
         var intensity: BeatIntensity
-        if currentNumerator == 0 {
-            intensity = (tickIndex % refStep == 0) ? .medium : .weak
-        } else if tickIndex == 0 {
+        
+        if tickIndex == 0 && currentNumerator != 0 {
             intensity = .strong
-        } else if tickIndex % refStep == 0 {
-            intensity = .medium
+        } else if isRefMultiple {
+            // 整数倍ケース: 基準音符のパルスが中、重なっていない分母の拍は弱
+            if tickIndex % refStep == 0 {
+                intensity = .medium
+            } else if tickIndex % outerStep == 0 {
+                intensity = .weak
+            } else {
+                intensity = .silence
+            }
         } else {
-            intensity = .weak
+            // 非整数倍・細分化ケース: 分母の拍が中、基準音符の節目が弱
+            if tickIndex % outerStep == 0 {
+                intensity = .medium
+            } else if tickIndex % refStep == 0 {
+                intensity = .weak
+            } else {
+                intensity = .silence
+            }
         }
         
         if simplified && intensity == .weak {
