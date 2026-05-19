@@ -96,19 +96,23 @@ final class MetronomeEngine {
         timer?.cancel()
         timer = nil
     }
-    
     private func updateTimerSchedule(isRestart: Bool) {
+        let interval = 60.0 / Double(bpm)
+
         let deadline: DispatchTime
         if isRestart {
-            let nextTime = lastTickTime + internalInterval
+            // BPM変更時：最後に鳴った時刻 + 新しい間隔
+            let nextTime = lastTickTime + interval
             deadline = nextTime < .now() ? .now() : nextTime
         } else {
+            // 開始時：100ms後に最初の1拍目を予約
             deadline = .now() + .milliseconds(100)
-            lastTickTime = deadline - internalInterval
+            // 修正：lastTickTimeを未来のdeadlineそのものに設定し、
+            // それまでは進捗計算が0（ガードにかかる）になるようにします
+            lastTickTime = deadline
         }
-        timer?.schedule(deadline: deadline, repeating: internalInterval, leeway: .nanoseconds(0))
+        timer?.schedule(deadline: deadline, repeating: interval, leeway: .nanoseconds(0))
     }
-    
     private func tick() {
         let tickTime = DispatchTime.now()
         lock.lock()
