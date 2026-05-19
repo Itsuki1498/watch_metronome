@@ -42,27 +42,31 @@ struct ContentView: View {
             // 上部：BPM & 音価（Apple標準の洗練されたタイポグラフィ）
             VStack(spacing: -2) {
                 HStack(alignment: .center, spacing: 6) {
-                    // 音価（Wikimedia SVGグラフィック）
-                    noteValueDisplay(focused: focusedField == .noteValue)
-                        .onTapGesture { focusedField = .noteValue }
-                        .focusable()
-                        .focused($focusedField, equals: .noteValue)
-                        .digitalCrownRotation($viewModel.displayNoteValueIndex, from: 0, through: Double(max(0, viewModel.validNoteValueOptions.count - 1)), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
+                    // 音価（個別の表示高さでサイズを均一化）
+                    settingItem(target: .noteValue, label: "", size: 18, hPadding: 6) {
+                        Image(viewModel.currentNote.imageName)
+                            .resizable()
+                            .renderingMode(.template)
+                            .aspectRatio(contentMode: .fit)
+                            .frame(height: viewModel.currentNote.displayHeight)
+                            .padding(2) // 欠落（クリッピング）防止用
+                    }
+                    .digitalCrownRotation($viewModel.displayNoteValueIndex, from: 0, through: Double(max(0, viewModel.validNoteValueOptions.count - 1)), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                     
                     Text("=")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(.secondary.opacity(0.5))
                     
-                    // BPM
+                    // BPM (枠をさらにタイトに)
                     settingItem(target: .bpm, label: "\(viewModel.bpm)", size: 50, hPadding: 3)
                         .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
-                // BPMラベル（位置を少し下げて調整）
+                // BPMラベル
                 Text("BPM")
                     .font(.system(size: 13, weight: .bold))
                     .kerning(1.5)
                     .foregroundStyle(.secondary.opacity(0.8))
-                    .padding(.top, 4) // 指示通り少し下げる
+                    .padding(.top, 4)
             }
             .padding(.top, 25)
             
@@ -122,30 +126,6 @@ struct ContentView: View {
         .padding(.horizontal)
     }
     
-    // 音符表示コンポーネント
-    private func noteValueDisplay(focused: Bool) -> some View {
-        HStack(spacing: 0) {
-            Image(viewModel.currentNote.imageName)
-                .resizable()
-                .renderingMode(.template) // 色指定可能にする
-                .aspectRatio(contentMode: .fit)
-                .frame(height: 24) // 少し大きく表示
-        }
-        .foregroundStyle(focused ? Color.white : Color.primary.opacity(0.8))
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(
-            ZStack {
-                if focused {
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(Color.blue.opacity(0.2))
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .stroke(Color.cyan, lineWidth: 1)
-                }
-            }
-        )
-    }
-    
     private func modeIcon(_ mode: RhythmMode) -> String {
         switch mode {
         case .all:          return "speaker.wave.3.fill"
@@ -154,30 +134,37 @@ struct ContentView: View {
         }
     }
     
-    private func settingItem(target: MetronomeViewModel.EditTarget, label: String, size: CGFloat = 20, hPadding: CGFloat = 6) -> some View {
-        Text(label)
-            .font(.system(size: size, weight: .bold, design: .default).monospacedDigit())
-            .foregroundStyle(focusedField == target ? .white : .primary.opacity(0.8))
-            .padding(.horizontal, hPadding)
-            .padding(.vertical, 1)
-            .background(
-                ZStack {
-                    if focusedField == target {
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(Color.blue.opacity(0.2))
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .stroke(Color.cyan, lineWidth: 1)
-                    }
-                }
-            )
-            .contentShape(Rectangle())
-            .onTapGesture {
-                focusedField = target
-                WKInterfaceDevice.current().play(.click)
+    // 全ての項目で統一された選択UIコンポーネント
+    private func settingItem<Content: View>(target: MetronomeViewModel.EditTarget, label: String, size: CGFloat = 20, hPadding: CGFloat = 6, @ViewBuilder customContent: () -> Content = { EmptyView() }) -> some View {
+        Group {
+            if label.isEmpty {
+                customContent()
+            } else {
+                Text(label)
+                    .font(.system(size: size, weight: .bold, design: .default).monospacedDigit())
             }
-            .focusable()
-            .focused($focusedField, equals: target)
-            .animation(.easeInOut(duration: 0.1), value: focusedField)
+        }
+        .foregroundStyle(focusedField == target ? .white : .primary.opacity(0.8))
+        .padding(.horizontal, hPadding)
+        .padding(.vertical, 1)
+        .background(
+            ZStack {
+                if focusedField == target {
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(Color.blue.opacity(0.2))
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .stroke(Color.cyan, lineWidth: 1)
+                }
+            }
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            focusedField = target
+            WKInterfaceDevice.current().play(.click)
+        }
+        .focusable()
+        .focused($focusedField, equals: target)
+        .animation(.easeInOut(duration: 0.1), value: focusedField)
     }
 }
 
@@ -223,7 +210,6 @@ struct ModernPieIndicatorView: View {
             context.stroke(Circle().path(in: CGRect(x: center.x - outerRadius, y: center.y - outerRadius, width: outerRadius * 2, height: outerRadius * 2)), with: .color(.white.opacity(0.05)), lineWidth: 1)
             
             if viewModel.numerator > 0 {
-                // 1. 外側リング (分母基準)
                 let outerCount = Double(max(1, viewModel.numerator))
                 let outerStep = 1.0 / outerCount
                 for i in 0..<Int(outerCount) {
@@ -241,7 +227,6 @@ struct ModernPieIndicatorView: View {
                     }
                 }
                 
-                // 2. 内側リング (基準音符準拠)
                 let totalTicks = Double(max(1, viewModel.totalTicksInMeasure))
                 let ticksPerRef = Double(max(1, viewModel.ticksPerRefNote))
                 let mediumBeatCount = Int(ceil(totalTicks / ticksPerRef))
@@ -263,7 +248,6 @@ struct ModernPieIndicatorView: View {
                     }
                 }
             } else {
-                // 0拍子（フラット）
                 drawArc(context: context, center: center, radius: outerRadius, start: -90, end: 270, color: .white.opacity(0.04), width: 2)
                 if isPlaying {
                     drawArc(context: context, center: center, radius: outerRadius, start: currentAngle, end: 269.5, color: .cyan, width: 8)
