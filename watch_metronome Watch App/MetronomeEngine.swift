@@ -62,8 +62,7 @@ final class MetronomeEngine {
         let unitDenom = 4.0 / Double(denominator)
         let unitRef = referenceNoteMultiplier
         
-        // 音楽的な範囲で共通の最小パルスを動的に決定
-        let possibleUnits: [Double] = [2.0, 1.0, 0.5, 0.25, 0.125] // 2, 4, 8, 16, 32
+        let possibleUnits: [Double] = [2.0, 1.0, 0.5, 0.25, 0.125]
         var pulseUnit = unitDenom
         for unit in possibleUnits {
             let ratioDenom = unitDenom / unit
@@ -71,7 +70,7 @@ final class MetronomeEngine {
             if abs(ratioDenom - round(ratioDenom)) < 0.0001 && 
                abs(ratioRef - round(ratioRef)) < 0.0001 {
                 pulseUnit = unit
-                break // 最大公約数（荒い単位）を見つけたら終了
+                break
             }
         }
         
@@ -79,7 +78,6 @@ final class MetronomeEngine {
         ticksPerOuterBeat = max(1, Int(round(unitDenom / pulseUnit)))
         ticksPerRefNote = max(1, Int(round(unitRef / pulseUnit)))
         
-        // 基準音符1回 = ticksPerRefNoteパルス
         internalInterval = (60.0 / Double(bpm)) / Double(ticksPerRefNote)
         
         if isPlaying { updateTimerSchedule(isRestart: true) }
@@ -134,7 +132,6 @@ final class MetronomeEngine {
         }
         
         tickCount += 1
-        // 強制リセット: 小節頭で位相を合わせる
         if tickCount > totalTicksInMeasure {
             tickCount = 1
         }
@@ -142,6 +139,7 @@ final class MetronomeEngine {
         let currentTick = tickCount
         lastTickTime = tickTime
         
+        let currentNumerator = numerator
         let outerStep = ticksPerOuterBeat
         let refStep = ticksPerRefNote
         let simplified = isSimplifiedMode
@@ -150,17 +148,18 @@ final class MetronomeEngine {
         let tickIndex = currentTick - 1
         let logicalBeat = Double(tickIndex) / Double(outerStep) + 1.0
         
-        // --- 修正：一生君の要件に基づく強弱優先順位 ---
+        // --- 修正：分子が0の時は強拍なし（全て中拍または弱拍） ---
         var intensity: BeatIntensity
-        if tickIndex == 0 {
-            intensity = .strong // 1. 小節頭が最優先
+        if currentNumerator == 0 {
+            intensity = (tickIndex % refStep == 0) ? .medium : .weak
+        } else if tickIndex == 0 {
+            intensity = .strong
         } else if tickIndex % refStep == 0 {
-            intensity = .medium // 2. 基準音符の節目 (中拍)
+            intensity = .medium
         } else {
-            intensity = .weak   // 3. その他
+            intensity = .weak
         }
         
-        // 通知
         if simplified && intensity == .weak {
             onTick?(logicalBeat, .silence, tickTime)
         } else {
