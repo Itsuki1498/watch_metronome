@@ -52,6 +52,8 @@ final class MetronomeViewModel {
         set { 
             let newIntValue = Int(newValue)
             if newIntValue != engine.numerator { engine.numerator = newIntValue }
+            // 分子を変えたら選択可能な基準音符を再フィルタリング
+            refreshValidNoteValues()
         }
     }
     
@@ -63,6 +65,8 @@ final class MetronomeViewModel {
                 let newDenom = denominatorOptions[index]
                 if newDenom != engine.denominator {
                     engine.denominator = newDenom
+                    // 分母を変えたら選択可能な基準音符を再フィルタリング
+                    refreshValidNoteValues()
                     syncNoteValueToDenominator()
                 }
             }
@@ -70,12 +74,13 @@ final class MetronomeViewModel {
     }
     
     var displayNoteValueIndex: Double {
-        get { Double(noteValueIndex) }
+        get { Double(validNoteValueOptions.firstIndex(of: noteValueOptions[noteValueIndex]) ?? 0) }
         set { 
             let index = Int(newValue)
-            if index >= 0 && index < noteValueOptions.count {
-                if index != noteValueIndex {
-                    noteValueIndex = index
+            if index >= 0 && index < validNoteValueOptions.count {
+                let selectedNote = validNoteValueOptions[index]
+                if let masterIndex = noteValueOptions.firstIndex(of: selectedNote) {
+                    noteValueIndex = masterIndex
                 }
             }
         }
@@ -89,18 +94,15 @@ final class MetronomeViewModel {
     
     var isPlaying: Bool { engine.isPlaying }
     
-    /// --- 同期された状態プロパティ ---
     var currentBeat: Double = 1.0
     var currentIntensity: BeatIntensity = .weak
     var lastTickTime: DispatchTime = .now()
     
-    /// --- エンジンの不変条件を一括公開 ---
     var numerator: Int { engine.numerator }
     var denominator: Int { engine.denominator }
     var totalTicksInMeasure: Int { engine.totalTicksInMeasure }
     var ticksPerOuterBeat: Int { engine.ticksPerOuterBeat }
     var tickInterval: Double { engine.internalInterval }
-    /// --------------------------
     
     let denominatorOptions = [2, 4, 8, 16, 32]
     
@@ -117,6 +119,9 @@ final class MetronomeViewModel {
         NoteValue(name: "32", multiplier: 0.125)
     ]
     
+    /// 現在の分母に対して有効な（整数倍または整数分の1になる）音価のみを表示
+    var validNoteValueOptions: [NoteValue] = []
+    
     var currentNoteName: String {
         noteValueOptions[noteValueIndex].name
     }
@@ -124,6 +129,7 @@ final class MetronomeViewModel {
     // MARK: - Initialization
     
     init() {
+        refreshValidNoteValues()
         setupEngine()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
             self.isSystemReady = true
@@ -132,15 +138,13 @@ final class MetronomeViewModel {
     
     private func setupEngine() {
         engine.onTick = { [weak self] (beat: Double, intensity: BeatIntensity, tickTime: DispatchTime) in
-            // 振動
             switch intensity {
-            case .strong:  self?.hapticManager.playStrong()
-            case .medium:  self?.hapticManager.playMedium()
-            case .weak:    self?.hapticManager.playWeak()
+            case .strong: self?.hapticManager.playStrong()
+            case .medium: self?.hapticManager.playMedium()
+            case .weak:   self?.hapticManager.playWeak()
             case .silence: break
             }
             
-            // UI状態の完全同期
             DispatchQueue.main.async {
                 self?.currentBeat = beat
                 self?.currentIntensity = intensity
@@ -149,18 +153,26 @@ final class MetronomeViewModel {
         }
     }
     
-    private func syncNoteValueToDenominator() {
-        let targetMultiplier: Double
-        switch engine.denominator {
-        case 2: targetMultiplier = 2.0
-        case 4: targetMultiplier = 1.0
-        case 8: targetMultiplier = 0.5
-        case 16: targetMultiplier = 0.25
-        case 32: targetMultiplier = 0.125
-        default: targetMultiplier = 1.0
+    /// 有効な音価リストを更新
+    private func refreshValidNoteValues() {
+        let unitDenom = 4.0 / Double(engine.denominator)
+        validNoteValueOptions = noteValueOptions.filter { note in
+            let m = note.multiplier
+            // 整数倍(m / unitDenom) または 整数分の1(unitDenom / m) かを判定
+            let ratio1 = m / unitDenom
+            let ratio2 = unitDenom / m
+            return abs(ratio1 - round(ratio1)) < 0.001 || abs(ratio2 - round(ratio2)) < 0.001
         }
         
-        if let index = noteValueOptions.firstIndex(where: { $0.multiplier == targetMultiplier }) {
+        // 現在の選択がリスト外になったら安全な値（分母相当）に強制
+        if !validNoteValueOptions.contains(noteValueOptions[noteValueIndex]) {
+            syncNoteValueToDenominator()
+        }
+    }
+    
+    private func syncNoteValueToDenominator() {
+        let unitDenom = 4.0 / Double(engine.denominator)
+        if let index = noteValueOptions.firstIndex(where: { abs($0.multiplier - unitDenom) < 0.001 }) {
             noteValueIndex = index
         }
     }
@@ -170,7 +182,6 @@ final class MetronomeViewModel {
             engine.stop()
         } else {
             engine.start()
-            // 開始時に状態をリセット
             self.currentBeat = 1.0
             self.currentIntensity = .strong
             self.lastTickTime = engine.lastTickTime

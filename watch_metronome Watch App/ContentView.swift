@@ -14,7 +14,6 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
-            // 背景レイヤー: 精密な同期UI
             TimelineView(.animation(minimumInterval: 0.016)) { context in
                 ModernPieIndicatorView(
                     viewModel: viewModel,
@@ -43,7 +42,7 @@ struct ContentView: View {
             VStack(spacing: -2) {
                 HStack(alignment: .center, spacing: 6) {
                     settingItem(target: .noteValue, label: viewModel.currentNoteName, size: 18, hPadding: 6)
-                        .digitalCrownRotation($viewModel.displayNoteValueIndex, from: 0, through: Double(viewModel.noteValueOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
+                        .digitalCrownRotation($viewModel.displayNoteValueIndex, from: 0, through: Double(max(0, viewModel.validNoteValueOptions.count - 1)), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                     
                     Text("=")
                         .font(.system(size: 12, weight: .bold))
@@ -125,7 +124,6 @@ struct ContentView: View {
             }
             .focusable()
             .focused($focusedField, equals: target)
-            .animation(.easeInOut(duration: 0.1), value: focusedField)
     }
 }
 
@@ -140,57 +138,62 @@ struct ModernPieIndicatorView: View {
             let outerRadius = radius - 2
             let innerRadius = outerRadius - 10
             
-            // 静的ベース
+            let isPlaying = viewModel.isPlaying
+            
+            // --- 精密な同期計算 (フリッカー防止ガード) ---
+            let currentProgress = isPlaying ? currentMeasureProgress() : 0.0
+            // 360度に達した瞬間に0に戻る際の不連続性を考慮
+            let currentAngle = (currentProgress * 359.99) - 90.0
+            
+            // 1. 静的ベース
             context.stroke(Circle().path(in: CGRect(x: center.x - outerRadius, y: center.y - outerRadius, width: outerRadius * 2, height: outerRadius * 2)), with: .color(.white.opacity(0.05)), lineWidth: 1)
             
-            let isPlaying = viewModel.isPlaying
-            let totalTicks = Double(max(1, viewModel.totalTicksInMeasure))
-            let currentProgress = isPlaying ? currentMeasureProgress() : 0.0
-            let currentAngle = (currentProgress * 360.0) - 90.0
-            
-            // 1. 外側リング (分母基準のメイン拍)
-            let outerCount = Double(max(1, viewModel.numerator))
-            let outerStepAngle = 360.0 / outerCount
-            for i in 0..<Int(outerCount) {
-                let start = Double(i) * outerStepAngle - 90
-                let end = Double(i + 1) * outerStepAngle - 90
-                let isCurrent = isPlaying && (currentAngle >= start && currentAngle < end)
+            if viewModel.numerator > 0 {
+                // 2. 外側リング (分母基準)
+                let outerCount = Double(max(1, viewModel.numerator))
+                let outerStep = 360.0 / outerCount
+                for i in 0..<Int(outerCount) {
+                    let start = Double(i) * outerStep - 90
+                    let end = Double(i + 1) * outerStep - 90
+                    
+                    drawArc(context: context, center: center, radius: outerRadius, start: start + 0.5, end: end - 0.5, color: .white.opacity(0.04), width: 2)
+                    
+                    // 針の現在位置に基づいたアクティブ描画
+                    if isPlaying {
+                        let effectiveStart = max(start, currentAngle)
+                        if effectiveStart < end - 0.5 && currentAngle >= start {
+                            let color = (i == 0) ? Color.orange : Color.cyan
+                            drawArc(context: context, center: center, radius: outerRadius, start: effectiveStart + 0.5, end: end - 0.5, color: color, width: 8)
+                        }
+                    }
+                }
                 
-                drawArc(context: context, center: center, radius: outerRadius, start: start + 0.5, end: end - 0.5, color: .white.opacity(0.04), width: 2)
-                
-                if isCurrent {
-                    let effectiveStart = max(start, currentAngle)
-                    if effectiveStart < end - 0.5 {
-                        let color = (i == 0) ? Color.orange : Color.cyan
-                        drawArc(context: context, center: center, radius: outerRadius, start: effectiveStart + 0.5, end: end - 0.5, color: color, width: 8)
+                // 3. 内側リング (基準音符基準のパルス)
+                let innerCount = Double(max(1, viewModel.totalTicksInMeasure))
+                let innerStep = 360.0 / innerCount
+                for i in 0..<Int(innerCount) {
+                    let start = Double(i) * innerStep - 90
+                    let end = Double(i + 1) * innerStep - 90
+                    
+                    drawArc(context: context, center: center, radius: innerRadius, start: start + 1.5, end: end - 1.5, color: .blue.opacity(0.06), width: 1.5)
+                    
+                    if isPlaying {
+                        let effectiveStart = max(start, currentAngle)
+                        if effectiveStart < end - 1.5 && currentAngle >= start {
+                            drawArc(context: context, center: center, radius: innerRadius, start: effectiveStart + 1.5, end: end - 1.5, color: .white.opacity(0.6), width: 5)
+                        }
                     }
                 }
             }
             
-            // 2. 内側リング (基準音符基準のパルス)
-            let innerCount = totalTicks
-            let innerStepAngle = 360.0 / innerCount
-            for i in 0..<Int(innerCount) {
-                let start = Double(i) * innerStepAngle - 90
-                let end = Double(i + 1) * innerStepAngle - 90
-                let isCurrent = isPlaying && (currentAngle >= start && currentAngle < end)
-                
-                drawArc(context: context, center: center, radius: innerRadius, start: start + 1.5, end: end - 1.5, color: .blue.opacity(0.06), width: 1.5)
-                
-                if isCurrent {
-                    let effectiveStart = max(start, currentAngle)
-                    if effectiveStart < end - 1.5 {
-                        drawArc(context: context, center: center, radius: innerRadius, start: effectiveStart + 1.5, end: end - 1.5, color: .white.opacity(0.6), width: 5)
-                    }
-                }
-            }
-            
-            // 3. スキャン針
+            // 4. スキャン針
             if isPlaying {
-                let angle = currentAngle
                 var path = Path()
                 path.move(to: center)
-                let endPoint = CGPoint(x: center.x + outerRadius * cos(angle * .pi / 180), y: center.y + outerRadius * sin(angle * .pi / 180))
+                let endPoint = CGPoint(
+                    x: center.x + outerRadius * cos(currentAngle * .pi / 180),
+                    y: center.y + outerRadius * sin(currentAngle * .pi / 180)
+                )
                 path.addLine(to: endPoint)
                 context.stroke(path, with: .color(.white.opacity(0.9)), lineWidth: 1.5)
                 context.fill(Circle().path(in: CGRect(x: endPoint.x - 2, y: endPoint.y - 2, width: 4, height: 4)), with: .color(.white))
@@ -210,14 +213,8 @@ struct ModernPieIndicatorView: View {
         guard now >= last else { return 0.0 }
         let elapsed = Double(now.uptimeNanoseconds - last.uptimeNanoseconds) / 1_000_000_000.0
         
-        // 現在のパルスインデックスを逆算
-        let beatIdx = viewModel.currentBeat - 1.0 // 0-based logical beat
-        let pulseDuration = viewModel.tickInterval
-        
-        // (論理的な拍の位置 * 外側の1拍あたりのパルス数 + 経過分) / 全パルス数
-        // ではなく、もっとシンプルに：
-        // (鳴った拍のインデックス + (鳴ってからの経過時間 / 1パルスの時間)) / 総パルス数
-        let currentPulseProgress = (beatIdx * Double(viewModel.ticksPerOuterBeat)) + (elapsed / pulseDuration)
+        let beatIdx = viewModel.currentBeat - 1.0
+        let currentPulseProgress = (beatIdx * Double(viewModel.ticksPerOuterBeat)) + (elapsed / viewModel.tickInterval)
         let totalProgress = currentPulseProgress / Double(viewModel.totalTicksInMeasure)
         
         return totalProgress.truncatingRemainder(dividingBy: 1.0)
