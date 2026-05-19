@@ -131,7 +131,7 @@ struct ContentView: View {
             .font(.system(size: size, weight: .bold, design: .default).monospacedDigit())
             .foregroundStyle(focusedField == target ? .white : .primary.opacity(0.8))
             .padding(.horizontal, hPadding)
-            .padding(.vertical, 2)
+            .padding(.vertical, 1) // 上下1ピクセルずつ削ってタイトにする
             .background(
                 ZStack {
                     if focusedField == target {
