@@ -49,7 +49,8 @@ struct ContentView: View {
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(.secondary.opacity(0.5))
                     
-                    settingItem(target: .bpm, label: "\(viewModel.bpm)", size: 50, hPadding: 4)
+                    // BPM (数字を少し小さく、細く。枠をさらにタイトに: 3pt)
+                    settingItem(target: .bpm, label: "\(viewModel.bpm)", size: 50, hPadding: 3)
                         .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
                 Text("BPM")
@@ -76,9 +77,9 @@ struct ContentView: View {
             
             Spacer()
             
-            // 下部：細身になった中央カプセル型ボタン
+            // 下部：中央カプセル型ボタン（幅68に拡張）
             HStack(spacing: 2) {
-                // 左側：モード切り替え（細身カプセル左）
+                // 左側：モード切り替え
                 Button {
                     viewModel.nextRhythmMode()
                     WKInterfaceDevice.current().play(.click)
@@ -87,15 +88,15 @@ struct ContentView: View {
                         CapsuleHalf(side: .left)
                             .fill(Color.blue.opacity(0.12))
                         Image(systemName: modeIcon(viewModel.rhythmMode))
-                            .font(.system(size: 15))
+                            .font(.system(size: 16))
                             .foregroundStyle(viewModel.rhythmMode == .strongOnly ? .orange : .blue)
                             .offset(x: -2)
                     }
                 }
                 .buttonStyle(.plain)
-                .frame(width: 50, height: 34) // さらに細長く
+                .frame(width: 68, height: 40) // 幅を68に
                 
-                // 右側：再生/停止（細身カプセル右）
+                // 右側：再生/停止
                 Button {
                     viewModel.togglePlayback()
                     WKInterfaceDevice.current().play(.click)
@@ -104,15 +105,15 @@ struct ContentView: View {
                         CapsuleHalf(side: .right)
                             .fill(viewModel.isPlaying ? Color.red.opacity(0.12) : Color.green.opacity(0.12))
                         Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
-                            .font(.system(size: 16))
+                            .font(.system(size: 18))
                             .foregroundStyle(viewModel.isPlaying ? .red : .green)
                             .offset(x: 2)
                     }
                 }
                 .buttonStyle(.plain)
-                .frame(width: 50, height: 34) // さらに細長く
+                .frame(width: 68, height: 40) // 幅を68に
             }
-            .padding(.bottom, 10)
+            .padding(.bottom, 5) // パディングを5に減らして位置を下げる
         }
         .padding(.horizontal)
     }
