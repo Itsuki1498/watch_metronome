@@ -12,8 +12,6 @@ import Observation
 struct NoteValue: Hashable {
     let name: String
     let multiplier: Double
-    let symbol: String // 今回は確実に表示される Unicode 音楽記号を使用
-    let isDotted: Bool
 }
 
 /// メトロノームの画面状態と操作を管理するViewModel
@@ -102,22 +100,21 @@ final class MetronomeViewModel {
     
     let denominatorOptions = [2, 4, 8, 16, 32]
     
-    // SF Symbolsの代わりにUnicode音楽記号を使用し、確実な表示とシャープな印象を両立
     let noteValueOptions: [NoteValue] = [
-        NoteValue(name: "全", multiplier: 4.0, symbol: "𝅝", isDotted: false),
-        NoteValue(name: "付2", multiplier: 3.0, symbol: "𝅗𝅥", isDotted: true),
-        NoteValue(name: "2", multiplier: 2.0, symbol: "𝅗𝅥", isDotted: false),
-        NoteValue(name: "付4", multiplier: 1.5, symbol: "♩", isDotted: true),
-        NoteValue(name: "4", multiplier: 1.0, symbol: "♩", isDotted: false),
-        NoteValue(name: "付8", multiplier: 0.75, symbol: "♪", isDotted: true),
-        NoteValue(name: "8", multiplier: 0.5, symbol: "♪", isDotted: false),
-        NoteValue(name: "付16", multiplier: 0.375, symbol: "𝅘𝅥𝅯", isDotted: true),
-        NoteValue(name: "16", multiplier: 0.25, symbol: "𝅘𝅥𝅯", isDotted: false),
-        NoteValue(name: "32", multiplier: 0.125, symbol: "𝅘𝅥𝅰", isDotted: false)
+        NoteValue(name: "全", multiplier: 4.0),
+        NoteValue(name: "付2", multiplier: 3.0),
+        NoteValue(name: "2", multiplier: 2.0),
+        NoteValue(name: "付4", multiplier: 1.5),
+        NoteValue(name: "4", multiplier: 1.0),
+        NoteValue(name: "付8", multiplier: 0.75),
+        NoteValue(name: "8", multiplier: 0.5),
+        NoteValue(name: "付16", multiplier: 0.375),
+        NoteValue(name: "16", multiplier: 0.25),
+        NoteValue(name: "32", multiplier: 0.125)
     ]
     
-    var currentNote: NoteValue {
-        noteValueOptions[noteValueIndex]
+    var currentNoteName: String {
+        noteValueOptions[noteValueIndex].name
     }
     
     // MARK: - Initialization
@@ -175,6 +172,9 @@ final class MetronomeViewModel {
             engine.stop()
         } else {
             engine.start()
+            self.currentBeat = 1
+            self.currentIntensity = .strong
+            self.lastTickTime = engine.lastTickTime
         }
     }
 }
