@@ -21,7 +21,7 @@ struct ContentView: View {
                     date: context.date
                 )
             }
-            .padding(6)
+            .padding(12) // パディングを増やして画面端（特に上部）の見切れを防止
             
             if !viewModel.isSystemReady {
                 ProgressView()
@@ -55,7 +55,7 @@ struct ContentView: View {
                     .font(.system(size: 8, weight: .black))
                     .foregroundStyle(.secondary.opacity(0.6))
             }
-            .padding(.top, 10)
+            .padding(.top, 12) // リングとの重なりを調整
             
             HStack(spacing: 12) {
                 HStack(spacing: 4) {
@@ -133,7 +133,7 @@ struct ModernPieIndicatorView: View {
         Canvas { context, size in
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
             let radius = min(size.width, size.height) / 2
-            let outerRadius = radius - 2
+            let outerRadius = radius - 5 // 半径をさらに小さくして確実に画面内に収める
             let innerRadius = outerRadius - 10
             
             // 1. 静的ベースライン
@@ -147,10 +147,8 @@ struct ModernPieIndicatorView: View {
             let numerator = viewModel.numerator
             let totalTicks = Double(max(1, numerator))
             
-            // --- 同期された進捗計算 ---
             let currentProgress = isPlaying ? currentMeasureProgress() : 0.0
             let currentAngle = (currentProgress * 360.0) - 90.0
-            // ---------------------
             
             if numerator > 0 {
                 // 2. 外側リング
@@ -160,10 +158,8 @@ struct ModernPieIndicatorView: View {
                     let endAngle = Double(i + 1) * stepAngle - 90
                     let isCurrent = isPlaying && (i + 1) == viewModel.currentBeat
                     
-                    // ベース
                     drawArc(context: context, center: center, radius: outerRadius, start: startAngle + 1, end: endAngle - 1, color: .white.opacity(0.05), width: 2)
                     
-                    // アクティブ（追従消灯）
                     if isCurrent {
                         let effectiveStartAngle = max(startAngle, currentAngle)
                         if effectiveStartAngle < endAngle - 1 {
@@ -227,10 +223,7 @@ struct ModernPieIndicatorView: View {
     private func currentMeasureProgress() -> Double {
         let now = DispatchTime.now()
         let last = viewModel.lastTickTime
-        
-        // リードタイム（開始までの100msなど）の間は0に固定してフリッカーを防ぐ
         guard now >= last else { return 0.0 }
-        
         let elapsedSinceLastTick = Double(now.uptimeNanoseconds - last.uptimeNanoseconds) / 1_000_000_000.0
         let beatIndex = Double(viewModel.currentBeat - 1)
         let totalProgress = (beatIndex + (elapsedSinceLastTick / viewModel.tickInterval)) / Double(max(1, viewModel.numerator))
