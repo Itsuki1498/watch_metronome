@@ -53,38 +53,33 @@ final class MetronomeEngine {
     
     // MARK: - Logic Constants
     
-    /// 最小単位（パルス）が刻まれる間隔（秒）
     private(set) var internalInterval: Double = 0.5
-    /// 1小節の中に最小単位がいくつ入るか
     private(set) var totalTicksInMeasure: Int = 4
-    /// メイン拍（分母基準）1拍あたりのパルス数
     private(set) var ticksPerOuterBeat: Int = 1
-    /// 基準音符1拍あたりのパルス数
     private(set) var ticksPerRefNote: Int = 1
 
     private func updateConstants() {
-        // --- 修正：32分固定を廃止し、必要最小限の単位を求める ---
         let unitDenom = 4.0 / Double(denominator)
         let unitRef = referenceNoteMultiplier
         
-        // 分母と基準音符を割り切れる「最小公約数的音価」を求める
-        // 音楽的な範囲（2分音符〜32分音符）で総当たりし、最小のパルスを決定
+        // 音楽的な範囲で共通の最小パルスを動的に決定
         let possibleUnits: [Double] = [2.0, 1.0, 0.5, 0.25, 0.125] // 2, 4, 8, 16, 32
         var pulseUnit = unitDenom
         for unit in possibleUnits {
-            let isDivisible1 = abs((unitDenom / unit) - round(unitDenom / unit)) < 0.001
-            let isDivisible2 = abs((unitRef / unit) - round(unitRef / unit)) < 0.001
-            if isDivisible1 && isDivisible2 {
+            let ratioDenom = unitDenom / unit
+            let ratioRef = unitRef / unit
+            if abs(ratioDenom - round(ratioDenom)) < 0.0001 && 
+               abs(ratioRef - round(ratioRef)) < 0.0001 {
                 pulseUnit = unit
+                break // 最大公約数（荒い単位）を見つけたら終了
             }
         }
         
-        // 小節内の総パルス数
         totalTicksInMeasure = max(1, Int(round((unitDenom * Double(numerator)) / pulseUnit)))
         ticksPerOuterBeat = max(1, Int(round(unitDenom / pulseUnit)))
         ticksPerRefNote = max(1, Int(round(unitRef / pulseUnit)))
         
-        // 基準音符基準のタイマー間隔
+        // 基準音符1回 = ticksPerRefNoteパルス
         internalInterval = (60.0 / Double(bpm)) / Double(ticksPerRefNote)
         
         if isPlaying { updateTimerSchedule(isRestart: true) }
@@ -139,8 +134,7 @@ final class MetronomeEngine {
         }
         
         tickCount += 1
-        
-        // --- 強制リセットロジック ---
+        // 強制リセット: 小節頭で位相を合わせる
         if tickCount > totalTicksInMeasure {
             tickCount = 1
         }
@@ -153,22 +147,20 @@ final class MetronomeEngine {
         let simplified = isSimplifiedMode
         lock.unlock()
         
-        // 最小単位のインデックス (0 〜 totalTicks-1)
         let tickIndex = currentTick - 1
         let logicalBeat = Double(tickIndex) / Double(outerStep) + 1.0
         
-        // --- 強弱判定 ---
+        // --- 修正：一生君の要件に基づく強弱優先順位 ---
         var intensity: BeatIntensity
         if tickIndex == 0 {
-            intensity = .strong // 小節頭
+            intensity = .strong // 1. 小節頭が最優先
         } else if tickIndex % refStep == 0 {
-            intensity = .medium // 基準音符（BPMパルス）の節目
-        } else if tickIndex % outerStep == 0 {
-            intensity = .medium // 拍（分母）の節目
+            intensity = .medium // 2. 基準音符の節目 (中拍)
         } else {
-            intensity = .weak   // それ以外のパルス
+            intensity = .weak   // 3. その他
         }
         
+        // 通知
         if simplified && intensity == .weak {
             onTick?(logicalBeat, .silence, tickTime)
         } else {

@@ -156,12 +156,24 @@ final class MetronomeViewModel {
     /// 有効な音価リストを更新
     private func refreshValidNoteValues() {
         let unitDenom = 4.0 / Double(engine.denominator)
+        let measureLength = unitDenom * Double(engine.numerator)
+        let minResolution = 0.125 // 32分音符
+        
         validNoteValueOptions = noteValueOptions.filter { note in
             let m = note.multiplier
-            // 整数倍(m / unitDenom) または 整数分の1(unitDenom / m) かを判定
-            let ratio1 = m / unitDenom
-            let ratio2 = unitDenom / m
-            return abs(ratio1 - round(ratio1)) < 0.001 || abs(ratio2 - round(ratio2)) < 0.001
+            
+            // 1. 1小節を超える音価は（練習用メトロノームとしては）不適切なので除外
+            if m > measureLength + 0.001 { return false }
+            
+            // 2. 最小解像度(0.125)で、その音価と分母単位の両方が割り切れるか
+            //    これにより、パルスとして数学的に矛盾なく刻めることが保証される
+            let rNote = m / minResolution
+            let rDenom = unitDenom / minResolution
+            
+            let isNoteResolvable = abs(rNote - round(rNote)) < 0.001
+            let isDenomResolvable = abs(rDenom - round(rDenom)) < 0.001
+            
+            return isNoteResolvable && isDenomResolvable
         }
         
         // 現在の選択がリスト外になったら安全な値（分母相当）に強制

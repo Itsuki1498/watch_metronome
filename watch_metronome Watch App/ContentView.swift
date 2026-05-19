@@ -136,18 +136,19 @@ struct ModernPieIndicatorView: View {
         Canvas { context, size in
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
             let radius = min(size.width, size.height) / 2
-            let outerRadius = radius - 2
-            let innerRadius = outerRadius - 10
+            let outerRadius = radius - 3
+            let innerRadius = outerRadius - 12
             
             let isPlaying = viewModel.isPlaying
             
-            // --- 修正：進捗計算を境界条件から守る ---
+            // --- 修正：進捗計算を境界条件から守る (不連続性の物理的排除) ---
             let rawProgress = isPlaying ? currentMeasureProgress() : 0.0
-            // 針の位置 (0.0-1.0)
             let needleProgress = rawProgress.truncatingRemainder(dividingBy: 1.0)
-            let currentAngle = (needleProgress * 360.0) - 90.0
             
-            // 1. 静的ベース
+            // フリッカー防止：1.0(360度)の直前で0に飛ばないよう微小なマージン
+            let safeProgress = needleProgress < 0.0001 ? 0.0 : min(0.9999, needleProgress)
+            let currentAngle = (safeProgress * 360.0) - 90.0
+            
             context.stroke(Circle().path(in: CGRect(x: center.x - outerRadius, y: center.y - outerRadius, width: outerRadius * 2, height: outerRadius * 2)), with: .color(.white.opacity(0.05)), lineWidth: 1)
             
             if viewModel.numerator > 0 {
@@ -158,18 +159,19 @@ struct ModernPieIndicatorView: View {
                     let rangeStart = Double(i) * outerStep
                     let rangeEnd = Double(i + 1) * outerStep
                     
-                    // 背景
-                    drawArc(context: context, center: center, radius: outerRadius, start: rangeStart * 360 - 90.5, end: rangeEnd * 360 - 89.5, color: .white.opacity(0.04), width: 2)
+                    drawArc(context: context, center: center, radius: outerRadius, start: rangeStart * 360 - 89.5, end: rangeEnd * 360 - 90.5, color: .white.opacity(0.04), width: 2)
                     
-                    // アクティブ判定（進捗率ベース）
-                    if isPlaying && needleProgress >= rangeStart && needleProgress < rangeEnd {
+                    if isPlaying && safeProgress >= rangeStart && safeProgress < rangeEnd {
                         let color = (i == 0) ? Color.orange : Color.cyan
-                        // 追従消灯：現在のセグメント内での進捗に応じて開始位置をずらす
-                        drawArc(context: context, center: center, radius: outerRadius, start: needleProgress * 360 - 90, end: rangeEnd * 360 - 90.5, color: color, width: 8)
+                        let segStart = safeProgress * 360 - 90
+                        let segEnd = rangeEnd * 360 - 90.5
+                        if segStart < segEnd {
+                            drawArc(context: context, center: center, radius: outerRadius, start: segStart, end: segEnd, color: color, width: 8)
+                        }
                     }
                 }
                 
-                // 3. 内側リング (基準音符基準のパルス)
+                // 3. 内側リング (基準音符パルス)
                 let innerCount = Double(max(1, viewModel.totalTicksInMeasure))
                 let innerStep = 1.0 / innerCount
                 for i in 0..<Int(innerCount) {
@@ -178,18 +180,20 @@ struct ModernPieIndicatorView: View {
                     
                     drawArc(context: context, center: center, radius: innerRadius, start: rangeStart * 360 - 88.5, end: rangeEnd * 360 - 91.5, color: .blue.opacity(0.06), width: 1.5)
                     
-                    if isPlaying && needleProgress >= rangeStart && needleProgress < rangeEnd {
-                        drawArc(context: context, center: center, radius: innerRadius, start: needleProgress * 360 - 90, end: rangeEnd * 360 - 91, color: .white.opacity(0.6), width: 5)
+                    if isPlaying && safeProgress >= rangeStart && safeProgress < rangeEnd {
+                        let segStart = safeProgress * 360 - 90
+                        let segEnd = rangeEnd * 360 - 91
+                        if segStart < segEnd {
+                            drawArc(context: context, center: center, radius: innerRadius, start: segStart, end: segEnd, color: .white.opacity(0.6), width: 5)
+                        }
                     }
                 }
             }
             
-            // 4. スキャン針
             if isPlaying {
-                let angle = currentAngle
                 var path = Path()
                 path.move(to: center)
-                let endPoint = CGPoint(x: center.x + outerRadius * cos(angle * .pi / 180), y: center.y + outerRadius * sin(angle * .pi / 180))
+                let endPoint = CGPoint(x: center.x + outerRadius * cos(currentAngle * .pi / 180), y: center.y + outerRadius * sin(currentAngle * .pi / 180))
                 path.addLine(to: endPoint)
                 context.stroke(path, with: .color(.white.opacity(0.9)), lineWidth: 1.5)
                 context.fill(Circle().path(in: CGRect(x: endPoint.x - 2, y: endPoint.y - 2, width: 4, height: 4)), with: .color(.white))
@@ -198,7 +202,6 @@ struct ModernPieIndicatorView: View {
     }
     
     private func drawArc(context: GraphicsContext, center: CGPoint, radius: CGFloat, start: Double, end: Double, color: Color, width: CGFloat) {
-        // 角度の逆転を防ぐガード
         guard end > start else { return }
         var path = Path()
         path.addArc(center: center, radius: radius, startAngle: .degrees(start), endAngle: .degrees(end), clockwise: false)
@@ -211,15 +214,11 @@ struct ModernPieIndicatorView: View {
         guard now >= last else { return 0.0 }
         let elapsed = Double(now.uptimeNanoseconds - last.uptimeNanoseconds) / 1_000_000_000.0
         
-        // 現在のパルスインデックス (0ベース)
         let beatIdx = viewModel.currentBeat - 1.0
-        let pulseDuration = viewModel.tickInterval
-        
-        // 総パルス数の中での現在位置
-        let currentPulseProgress = (beatIdx * Double(viewModel.ticksPerOuterBeat)) + (elapsed / pulseDuration)
+        let currentPulseProgress = (beatIdx * Double(viewModel.ticksPerOuterBeat)) + (elapsed / viewModel.tickInterval)
         let totalProgress = currentPulseProgress / Double(viewModel.totalTicksInMeasure)
         
-        return totalProgress // 呼び出し側で truncatingRemainder する
+        return totalProgress
     }
 }
 
