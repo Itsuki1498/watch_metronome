@@ -169,6 +169,10 @@ final class MetronomeViewModel {
             engine.stop()
         } else {
             engine.start()
+            // 再生開始時にUI状態を即座に初期化し、フリッカー（一瞬変な場所が光る）を防ぐ
+            self.currentBeat = 1
+            self.currentIntensity = .strong
+            self.lastTickTime = engine.lastTickTime
         }
     }
 }

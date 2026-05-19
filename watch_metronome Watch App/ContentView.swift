@@ -226,8 +226,12 @@ struct ModernPieIndicatorView: View {
     
     private func currentMeasureProgress() -> Double {
         let now = DispatchTime.now()
-        // ViewModel側で同期されたlastTickTimeを使用
-        let elapsedSinceLastTick = Double(now.uptimeNanoseconds - viewModel.lastTickTime.uptimeNanoseconds) / 1_000_000_000.0
+        let last = viewModel.lastTickTime
+        
+        // リードタイム（開始までの100msなど）の間は0に固定してフリッカーを防ぐ
+        guard now >= last else { return 0.0 }
+        
+        let elapsedSinceLastTick = Double(now.uptimeNanoseconds - last.uptimeNanoseconds) / 1_000_000_000.0
         let beatIndex = Double(viewModel.currentBeat - 1)
         let totalProgress = (beatIndex + (elapsedSinceLastTick / viewModel.tickInterval)) / Double(max(1, viewModel.numerator))
         return totalProgress.truncatingRemainder(dividingBy: 1.0)
