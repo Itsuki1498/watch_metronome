@@ -40,22 +40,22 @@ struct ContentView: View {
         VStack(spacing: 0) {
             // 上部：BPM & 音価（Apple標準の洗練されたタイポグラフィ）
             VStack(spacing: -2) {
-                HStack(alignment: .center, spacing: 6) {
+                HStack(alignment: .center, spacing: 4) {
                     // 音価
-                    settingItem(target: .noteValue, label: viewModel.currentNoteName, size: 18)
+                    settingItem(target: .noteValue, label: viewModel.currentNoteName, size: 18, hPadding: 6)
                         .digitalCrownRotation($viewModel.displayNoteValueIndex, from: 0, through: Double(viewModel.noteValueOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                     
                     Text("=")
-                        .font(.system(size: 14, weight: .heavy))
-                        .foregroundStyle(.orange.opacity(0.8))
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.secondary.opacity(0.5))
                     
-                    // BPM (数字を少し小さく: 50pt)
-                    settingItem(target: .bpm, label: "\(viewModel.bpm)", size: 50)
+                    // BPM (数字を少し小さく、細く)
+                    settingItem(target: .bpm, label: "\(viewModel.bpm)", size: 50, hPadding: 4)
                         .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
-                // BPMラベル（少し大きく: 13pt）
+                // BPMラベル
                 Text("BPM")
-                    .font(.system(size: 13, weight: .heavy))
+                    .font(.system(size: 13, weight: .bold))
                     .kerning(1.5)
                     .foregroundStyle(.secondary.opacity(0.8))
             }
@@ -66,14 +66,14 @@ struct ContentView: View {
             // 中央：拍子設定
             HStack(spacing: 12) {
                 HStack(spacing: 4) {
-                    settingItem(target: .numerator, label: "\(viewModel.numerator)", size: 24)
+                    settingItem(target: .numerator, label: "\(viewModel.numerator)", size: 24, hPadding: 6)
                         .digitalCrownRotation($viewModel.displayNumerator, from: 0, through: 32, by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                     
                     Text("/")
                         .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(.secondary.opacity(0.5))
                     
-                    settingItem(target: .denominator, label: "\(viewModel.denominator)", size: 24)
+                    settingItem(target: .denominator, label: "\(viewModel.denominator)", size: 24, hPadding: 6)
                         .digitalCrownRotation($viewModel.displayDenominatorIndex, from: 0, through: Double(viewModel.denominatorOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
                 
@@ -107,20 +107,19 @@ struct ContentView: View {
     }
     
     // 全ての項目で統一された選択UI
-    private func settingItem(target: MetronomeViewModel.EditTarget, label: String, size: CGFloat = 20) -> some View {
+    private func settingItem(target: MetronomeViewModel.EditTarget, label: String, size: CGFloat = 20, hPadding: CGFloat = 6) -> some View {
         Text(label)
-            .font(.system(size: size, weight: .heavy, design: .default).monospacedDigit()) // Apple標準の等幅数字フォント
+            .font(.system(size: size, weight: .bold, design: .default).monospacedDigit()) // 少し細いBoldに変更
             .foregroundStyle(focusedField == target ? .white : .primary.opacity(0.8))
-            .padding(.horizontal, 6)
+            .padding(.horizontal, hPadding)
             .padding(.vertical, 2)
             .background(
                 ZStack {
                     if focusedField == target {
-                        RoundedRectangle(cornerRadius: 4, style: .continuous) // よりシャープな角丸
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
                             .fill(Color.blue.opacity(0.2))
                         RoundedRectangle(cornerRadius: 4, style: .continuous)
                             .stroke(Color.cyan, lineWidth: 1)
-                            .shadow(color: .cyan.opacity(0.3), radius: 2)
                     }
                 }
             )
