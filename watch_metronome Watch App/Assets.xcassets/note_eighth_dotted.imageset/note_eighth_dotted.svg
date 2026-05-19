@@ -14,50 +14,16 @@
    
    
    >
-  <metadata
-     >
-    <rdf:RDF>
-      <cc:Work
-         rdf:about="">
-        <dc:format>image/svg+xml</dc:format>
-        <dc:type
-           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
-      </cc:Work>
-    </rdf:RDF>
-  </metadata>
+  
   <defs
       />
-  <sodipodi:namedview
-     pagecolor="#ffffff"
-     bordercolor="#666666"
-     borderopacity="1"
-     objecttolerance="10"
-     gridtolerance="10"
-     guidetolerance="10"
-     
-     
-     
-     
-     
-     showgr
-     fit-margin-top="0"
-     fit-margin-left="0"
-     fit-margin-right="0"
-     fit-margin-bottom="0"
-     
-     
-     
-     
-     
-     
-      />
+  
   <!-- Page: 1/1 -->
   <text
      transform="translate(-35.9458,-2.05)"
      font-size="2.1995"
      
-     style="font-size:2.19950008px;text-anchor:start;fill:currentColor;font-family:Century Schoolbook L">
+     style="fill:currentColor;stroke:currentColor">
     <tspan
         />
   </text>
@@ -65,8 +31,8 @@
      transform="matrix(0.004,0,0,-0.004,1.3162,0.03999998)"
      d="m 0,0 c 0,-198 209,-335 209,-533 0,-71 -16,-141 -42,-207 -5,-8 -12,-12 -19,-12 -13,0 -26,11 -23,27 26,61 42,126 42,192 0,104 -95,208 -167,283 H -16 V 0 H 0 z"
      
-     
-     style="fill:currentColor" />
+     inkscape:connector-curvature="0"
+     style="fill:currentColor;stroke:currentColor" />
   <rect
      transform="translate(1.2512,3)"
      x="-0.064999998"
@@ -75,17 +41,17 @@
      height="3.3122001"
      ry="0.039999999"
      
-     style="fill:currentColor" />
+     style="fill:currentColor;stroke:currentColor" />
   <path
      transform="matrix(0.004,0,0,-0.004,1.7662,3.5)"
      d="M 0,0 C 0,31 25,56 56,56 87,56 112,31 112,0 112,-31 87,-56 56,-56 25,-56 0,-31 0,0 z"
      
-     
-     style="fill:currentColor" />
+     inkscape:connector-curvature="0"
+     style="fill:currentColor;stroke:currentColor" />
   <path
      transform="matrix(0.004,0,0,-0.004,0,3.5)"
      d="m 220,138 c 56,0 109,-29 109,-91 0,-72 -56,-121 -103,-149 -36,-21 -76,-36 -117,-36 -56,0 -109,29 -109,91 0,72 56,121 103,149 36,21 76,36 117,36 z"
      
-     
-     style="fill:currentColor" />
+     inkscape:connector-curvature="0"
+     style="fill:currentColor;stroke:currentColor" />
 </svg>
