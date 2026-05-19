@@ -14,14 +14,14 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
-            // 背景レイヤー: 力強い二重円環
+            // 背景レイヤー: 精密な同期UI
             TimelineView(.animation(minimumInterval: 0.016)) { context in
                 ModernPieIndicatorView(
                     viewModel: viewModel,
                     date: context.date
                 )
             }
-            .padding(1) // 画面端ギリギリまで広げる
+            .padding(1)
             .ignoresSafeArea()
             
             if !viewModel.isSystemReady {
@@ -38,14 +38,11 @@ struct ContentView: View {
     
     private var mainControlUI: some View {
         VStack(spacing: 0) {
-            // 上部：BPM & 音価（大きく、力強く）
+            // 上部：BPM & 音価（シャープなフォント、統一された選択UI）
             VStack(spacing: -2) {
                 HStack(alignment: .center, spacing: 6) {
-                    // 音符記号
-                    noteValueDisplay(focused: focusedField == .noteValue)
-                        .onTapGesture { focusedField = .noteValue }
-                        .focusable()
-                        .focused($focusedField, equals: .noteValue)
+                    // 音符表示
+                    settingItem(target: .noteValue, label: viewModel.currentNote.symbol + (viewModel.currentNote.isDotted ? "." : ""), size: 28)
                         .digitalCrownRotation($viewModel.displayNoteValueIndex, from: 0, through: Double(viewModel.noteValueOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                     
                     Text("=")
@@ -53,12 +50,7 @@ struct ContentView: View {
                         .foregroundStyle(.orange.opacity(0.8))
                     
                     // BPM
-                    Text("\(viewModel.bpm)")
-                        .font(.system(size: 56, weight: .black, design: .rounded))
-                        .foregroundStyle(focusedField == .bpm ? Color.accentColor : .primary)
-                        .onTapGesture { focusedField = .bpm }
-                        .focusable()
-                        .focused($focusedField, equals: .bpm)
+                    settingItem(target: .bpm, label: "\(viewModel.bpm)", size: 56)
                         .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
                 Text("BPM")
@@ -76,7 +68,7 @@ struct ContentView: View {
                         .digitalCrownRotation($viewModel.displayNumerator, from: 0, through: 32, by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                     
                     Text("/")
-                        .font(.system(size: 18, weight: .ultraLight))
+                        .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(.secondary.opacity(0.5))
                     
                     settingItem(target: .denominator, label: "\(viewModel.denominator)", size: 24)
@@ -112,45 +104,21 @@ struct ContentView: View {
         .padding(.horizontal)
     }
     
-    // 音符記号の表示
-    private func noteValueDisplay(focused: Bool) -> some View {
-        HStack(spacing: 1) {
-            Image(systemName: viewModel.currentNote.symbolName)
-                .font(.system(size: 20, weight: .bold))
-            if viewModel.currentNote.isDotted {
-                Text(".")
-                    .font(.system(size: 24, weight: .bold))
-                    .offset(y: -4)
-            }
-        }
-        .foregroundStyle(focused ? Color.white : Color.primary.opacity(0.8))
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            ZStack {
-                if focused {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.blue.opacity(0.25))
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.cyan, lineWidth: 1.5)
-                }
-            }
-        )
-    }
-    
+    // 全ての項目で統一された選択UI
     private func settingItem(target: MetronomeViewModel.EditTarget, label: String, size: CGFloat = 20) -> some View {
         Text(label)
-            .font(.system(size: size, weight: .black, design: .rounded))
+            .font(.system(size: size, weight: .black, design: .default)) // 丸くない標準フォント
             .foregroundStyle(focusedField == target ? .white : .primary.opacity(0.8))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(
                 ZStack {
                     if focusedField == target {
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
                             .fill(Color.blue.opacity(0.25))
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
                             .stroke(Color.cyan, lineWidth: 1.5)
+                            .shadow(color: .cyan.opacity(0.3), radius: 2)
                     }
                 }
             )
@@ -161,88 +129,12 @@ struct ContentView: View {
             }
             .focusable()
             .focused($focusedField, equals: target)
+            .animation(.easeInOut(duration: 0.2), value: focusedField)
     }
 }
 
 struct ModernPieIndicatorView: View {
-    let viewModel: MetronomeViewModel
-    let date: Date
-    
-    var body: some View {
-        Canvas { context, size in
-            let center = CGPoint(x: size.width / 2, y: size.height / 2)
-            let radius = min(size.width, size.height) / 2
-            let outerRadius = radius - 3
-            let innerRadius = outerRadius - 12 // リング間の距離を少し広げる
-            
-            let isPlaying = viewModel.isPlaying
-            let numerator = viewModel.numerator
-            let totalTicks = Double(max(1, numerator))
-            let currentProgress = isPlaying ? currentMeasureProgress() : 0.0
-            let currentAngle = (currentProgress * 360.0) - 90.0
-            
-            if numerator > 0 {
-                // 1. 外側リング (太く: 8pt)
-                let stepAngle = 360.0 / totalTicks
-                for i in 0..<numerator {
-                    let startAngle = Double(i) * stepAngle - 90
-                    let endAngle = Double(i + 1) * stepAngle - 90
-                    let isCurrent = isPlaying && (i + 1) == viewModel.currentBeat
-                    
-                    drawArc(context: context, center: center, radius: outerRadius, start: startAngle + 0.5, end: endAngle - 0.5, color: .white.opacity(0.04), width: 2)
-                    
-                    if isCurrent {
-                        let effectiveStartAngle = max(startAngle, currentAngle)
-                        if effectiveStartAngle < endAngle - 0.5 {
-                            let color = colorForIntensity(viewModel.currentIntensity)
-                            drawArc(context: context, center: center, radius: outerRadius, start: effectiveStartAngle + 0.5, end: endAngle - 0.5, color: color, width: 8) // 太さアップ
-                        }
-                    }
-                }
-                
-                // 2. 内側リング (太く: 5pt)
-                let ticksPerMedium = Double(max(1, viewModel.ticksPerMediumBeat))
-                let mediumBeatCount = Int(ceil(totalTicks / ticksPerMedium))
-                
-                for i in 0..<mediumBeatCount {
-                    let startTick = Double(i) * ticksPerMedium
-                    let endTick = min(totalTicks, Double(i + 1) * ticksPerMedium)
-                    let startAngle = (startTick / totalTicks) * 360.0 - 90.0
-                    let endAngle = (endTick / totalTicks) * 360.0 - 90.0
-                    
-                    drawArc(context: context, center: center, radius: innerRadius, start: startAngle + 1.5, end: endAngle - 1.5, color: .cyan.opacity(0.06), width: 1.5)
-                    
-                    if isPlaying && currentAngle >= startAngle && currentAngle < endAngle {
-                        let effectiveStartAngle = max(startAngle, currentAngle)
-                        if effectiveStartAngle < endAngle - 1.5 {
-                            drawArc(context: context, center: center, radius: innerRadius, start: effectiveStartAngle + 1.5, end: endAngle - 1.5, color: .cyan.opacity(0.5), width: 5) // 太さアップ
-                        }
-                    }
-                }
-            }
-            
-            // 3. スキャン針
-            if isPlaying {
-                let angle = currentAngle
-                var path = Path()
-                path.move(to: center)
-                let endPoint = CGPoint(
-                    x: center.x + outerRadius * cos(angle * .pi / 180),
-                    y: center.y + outerRadius * sin(angle * .pi / 180)
-                )
-                path.addLine(to: endPoint)
-                context.stroke(path, with: .color(.white.opacity(0.9)), lineWidth: 1.5)
-                context.fill(Circle().path(in: CGRect(x: endPoint.x - 2, y: endPoint.y - 2, width: 4, height: 4)), with: .color(.white))
-            }
-        }
-    }
-    
-    private func drawArc(context: GraphicsContext, center: CGPoint, radius: CGFloat, start: Double, end: Double, color: Color, width: CGFloat) {
-        var path = Path()
-        path.addArc(center: center, radius: radius, startAngle: .degrees(start), endAngle: .degrees(end), clockwise: false)
-        context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: width, lineCap: .butt))
-    }
-    
+...
     private func colorForIntensity(_ intensity: BeatIntensity) -> Color {
         switch intensity {
         case .strong: return .orange
