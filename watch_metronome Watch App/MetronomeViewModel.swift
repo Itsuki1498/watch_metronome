@@ -5,7 +5,7 @@
 //  Created by Gemini on 2026/05/18.
 //
 
-import Foundation
+import SwiftUI
 import Observation
 
 /// 音価の定義
@@ -14,7 +14,7 @@ struct NoteValue: Hashable {
     let multiplier: Double
     let imageName: String
     let isDotted: Bool
-    let displayHeight: CGFloat // 個別の表示高さ
+    let displayHeight: CGFloat // SwiftUI の型を使用するため import SwiftUI が必要
 }
 
 /// メトロノームの画面状態と操作を管理するViewModel
@@ -32,7 +32,7 @@ final class MetronomeViewModel {
         case bpm, numerator, denominator, noteValue
     }
     
-    /// リズムモード (強拍のみ / 強・中 / 全て)
+    /// リズムモード (全て / 強・中 / 強のみ)
     var rhythmMode: RhythmMode {
         get { engine.rhythmMode }
         set { engine.rhythmMode = newValue }
@@ -96,6 +96,7 @@ final class MetronomeViewModel {
     
     var isPlaying: Bool { engine.isPlaying }
     
+    /// --- 同期された状態プロパティ ---
     var currentBeat: Double = 1.0
     var currentIntensity: BeatIntensity = .weak
     var lastTickTime: DispatchTime = .now()
