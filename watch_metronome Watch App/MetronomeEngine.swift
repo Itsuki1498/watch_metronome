@@ -11,10 +11,17 @@ import WatchKit
 
 /// 拍の強さ
 enum BeatIntensity {
-    case strong   // 強拍 (1拍目)
+    case strong   // 強拍
     case medium   // 中拍
     case weak     // 弱拍
-    case silence  // 無音 (簡易モード用)
+    case silence  // 無音
+}
+
+/// 演奏モード
+enum RhythmMode: Int, CaseIterable {
+    case strongOnly = 0 // 強拍のみ
+    case strongMedium = 1 // 強拍 + 中拍
+    case all = 2         // 全ての拍
 }
 
 /// メトロノームのリズム生成を担うエンジン
@@ -39,7 +46,8 @@ final class MetronomeEngine {
         didSet { updateConstants() }
     }
     
-    var isSimplifiedMode: Bool = false
+    /// 現在のリズムモード
+    var rhythmMode: RhythmMode = .all
     
     private(set) var isPlaying: Bool = false
     private var tickCount: Int = 0
@@ -61,8 +69,6 @@ final class MetronomeEngine {
     private func updateConstants() {
         let unitDenom = 4.0 / Double(denominator)
         let unitRef = referenceNoteMultiplier
-        
-        // ベースとなる最小解像度 (32分音符)
         let pulseUnit = 0.125 
         
         totalTicksInMeasure = max(1, Int(round((unitDenom * Double(numerator)) / pulseUnit)))
@@ -132,10 +138,9 @@ final class MetronomeEngine {
         
         let outerStep = ticksPerOuterBeat
         let refStep = ticksPerRefNote
-        let simplified = isSimplifiedMode
+        let mode = rhythmMode
         let currentNumerator = numerator
         
-        // 倍数関係の判定
         let unitDenom = 4.0 / Double(denominator)
         let unitRef = referenceNoteMultiplier
         let isRefMultiple = (unitRef / unitDenom) >= 0.999 && abs((unitRef / unitDenom) - round(unitRef / unitDenom)) < 0.001
@@ -145,35 +150,31 @@ final class MetronomeEngine {
         let tickIndex = currentTick - 1
         let logicalBeat = Double(tickIndex) / Double(outerStep) + 1.0
         
-        // --- 音楽的階層ロジックの決定 ---
-        var intensity: BeatIntensity
-        
+        // --- 音楽的階層ロジック ---
+        var rawIntensity: BeatIntensity
         if tickIndex == 0 && currentNumerator != 0 {
-            intensity = .strong
+            rawIntensity = .strong
         } else if isRefMultiple {
-            // 整数倍ケース: 基準音符のパルスが中、重なっていない分母の拍は弱
-            if tickIndex % refStep == 0 {
-                intensity = .medium
-            } else if tickIndex % outerStep == 0 {
-                intensity = .weak
-            } else {
-                intensity = .silence
-            }
+            if tickIndex % refStep == 0 { rawIntensity = .medium }
+            else if tickIndex % outerStep == 0 { rawIntensity = .weak }
+            else { rawIntensity = .silence }
         } else {
-            // 非整数倍・細分化ケース: 分母の拍が中、基準音符の節目が弱
-            if tickIndex % outerStep == 0 {
-                intensity = .medium
-            } else if tickIndex % refStep == 0 {
-                intensity = .weak
-            } else {
-                intensity = .silence
-            }
+            if tickIndex % outerStep == 0 { rawIntensity = .medium }
+            else if tickIndex % refStep == 0 { rawIntensity = .weak }
+            else { rawIntensity = .silence }
         }
         
-        if simplified && intensity == .weak {
-            onTick?(logicalBeat, .silence, tickTime)
-        } else {
-            onTick?(logicalBeat, intensity, tickTime)
+        // --- リズムモードによるフィルタリング ---
+        var finalIntensity: BeatIntensity = rawIntensity
+        switch mode {
+        case .strongOnly:
+            if rawIntensity != .strong { finalIntensity = .silence }
+        case .strongMedium:
+            if rawIntensity == .weak { finalIntensity = .silence }
+        case .all:
+            break
         }
+        
+        onTick?(logicalBeat, finalIntensity, tickTime)
     }
 }
