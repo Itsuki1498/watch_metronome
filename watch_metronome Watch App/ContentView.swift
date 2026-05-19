@@ -13,24 +13,34 @@ struct ContentView: View {
     @FocusState private var focusedField: MetronomeViewModel.EditTarget?
     
     var body: some View {
-        ZStack {
-            // 1. 背景レイヤー: 画面いっぱいの精密な円環
-            TimelineView(.animation(minimumInterval: 0.016)) { context in
-                ModernPieIndicatorView(
-                    viewModel: viewModel,
-                    date: context.date
-                )
-            }
-            .padding(2)
-            .ignoresSafeArea()
+        GeometryReader { screen in
+            let w = screen.size.width
+            let h = screen.size.height
+            let center = CGPoint(x: w / 2, y: h / 2)
+            let ringRadius = min(w, h) / 2 - 4
             
-            if !viewModel.isSystemReady {
-                ProgressView()
-                    .tint(.orange)
-            } else {
-                // 2. 前面レイヤー: 弧状ボタンを備えた有機的UI
-                mainControlUI
+            ZStack {
+                // 1. 背景レイヤー: 精密な円環
+                TimelineView(.animation(minimumInterval: 0.016)) { context in
+                    ModernPieIndicatorView(
+                        viewModel: viewModel,
+                        date: context.date
+                    )
+                }
+                .padding(2)
+                
+                if !viewModel.isSystemReady {
+                    ProgressView()
+                        .tint(.orange)
+                } else {
+                    // 2. コントロールレイヤー
+                    mainControlUI
+                    
+                    // 3. 左右下の弧状ボタン (座標を固定して精密に配置)
+                    arcButtons(center: center, ringRadius: ringRadius, screenWidth: w, screenHeight: h)
+                }
             }
+            .ignoresSafeArea()
         }
         .onAppear {
             focusedField = .bpm
@@ -57,7 +67,7 @@ struct ContentView: View {
                     .kerning(1.5)
                     .foregroundStyle(.secondary.opacity(0.8))
             }
-            .padding(.top, 25)
+            .padding(.top, 35)
             
             Spacer()
             
@@ -73,52 +83,49 @@ struct ContentView: View {
                 settingItem(target: .denominator, label: "\(viewModel.denominator)", size: 28, hPadding: 8)
                     .digitalCrownRotation($viewModel.displayDenominatorIndex, from: 0, through: Double(viewModel.denominatorOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
             }
+            .padding(.bottom, 20)
             
             Spacer()
-            
-            // 下部：リングに沿った弧状ボタン
-            HStack(alignment: .bottom) {
-                // 左下：リズム簡易化モード（メトロノームアイコンで直感的に）
-                Button {
-                    viewModel.isSimplifiedMode.toggle()
-                    WKInterfaceDevice.current().play(.click)
-                } label: {
-                    CornerArcShape(corner: .bottomLeft)
-                        .fill(viewModel.isSimplifiedMode ? Color.orange.opacity(0.3) : Color.gray.opacity(0.1))
-                        .frame(width: 50, height: 50)
-                        .overlay(alignment: .bottomLeading) {
-                            Image(systemName: "metronome") // リズムの核心を示すアイコン
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(viewModel.isSimplifiedMode ? .orange : .secondary)
-                                .padding(.leading, 8)
-                                .padding(.bottom, 8)
-                        }
-                }
-                .buttonStyle(.plain)
-                
-                Spacer()
-                
-                // 右下：再生/停止
-                Button {
-                    viewModel.togglePlayback()
-                } label: {
-                    CornerArcShape(corner: .bottomRight)
-                        .fill(viewModel.isPlaying ? Color.red.opacity(0.3) : Color.green.opacity(0.3))
-                        .frame(width: 50, height: 50)
-                        .overlay(alignment: .bottomTrailing) {
-                            Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
-                                .font(.system(size: 20))
-                                .foregroundStyle(viewModel.isPlaying ? .red : .green)
-                                .padding(.trailing, 8)
-                                .padding(.bottom, 8)
-                        }
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, -10) // 画面の角ギリギリに配置
-            .padding(.bottom, -10)
         }
-        .padding(.horizontal)
+    }
+    
+    // 弧状ボタンの配置ロジック
+    private func arcButtons(center: CGPoint, ringRadius: CGFloat, screenWidth: CGFloat, screenHeight: CGFloat) -> some View {
+        ZStack {
+            // 左下：簡易化ボタン
+            Button {
+                viewModel.isSimplifiedMode.toggle()
+                WKInterfaceDevice.current().play(.click)
+            } label: {
+                RhythmicArcShape(corner: .bottomLeft, screenCenter: center, ringRadius: ringRadius)
+                    .fill(viewModel.isSimplifiedMode ? Color.orange.opacity(0.25) : Color.gray.opacity(0.1))
+                    .overlay(alignment: .bottomLeading) {
+                        Image(systemName: "circle.grid.cross.fill") // パルスの集中を示すアイコン
+                            .font(.system(size: 15))
+                            .foregroundStyle(viewModel.isSimplifiedMode ? .orange : .secondary)
+                            .padding(.leading, 12)
+                            .padding(.bottom, 16)
+                    }
+            }
+            .buttonStyle(.plain)
+            
+            // 右下：再生ボタン
+            Button {
+                viewModel.togglePlayback()
+                WKInterfaceDevice.current().play(.click)
+            } label: {
+                RhythmicArcShape(corner: .bottomRight, screenCenter: center, ringRadius: ringRadius)
+                    .fill(viewModel.isPlaying ? Color.red.opacity(0.25) : Color.green.opacity(0.25))
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
+                            .font(.system(size: 18))
+                            .foregroundStyle(viewModel.isPlaying ? .red : .green)
+                            .padding(.trailing, 12)
+                            .padding(.bottom, 16)
+                    }
+            }
+            .buttonStyle(.plain)
+        }
     }
     
     private func settingItem(target: MetronomeViewModel.EditTarget, label: String, size: CGFloat = 20, hPadding: CGFloat = 6) -> some View {
@@ -147,32 +154,48 @@ struct ContentView: View {
     }
 }
 
-/// リングに沿って窪んだ特殊な三角形
-struct CornerArcShape: Shape {
+/// リングの外側にピッタリ沿う、凹状の斜辺を持つ三角形
+struct RhythmicArcShape: Shape {
     enum Corner {
         case bottomLeft, bottomRight
     }
     let corner: Corner
+    let screenCenter: CGPoint
+    let ringRadius: CGFloat
     
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let w = rect.width
-        let h = rect.height
+        let buttonRadius = ringRadius + 2 // リングとの隙間
         
         switch corner {
         case .bottomLeft:
+            // 左下隅のポイントを計算
+            // 垂直・水平線は画面端（rectの端）に沿う
             path.move(to: CGPoint(x: 0, y: 0))
-            path.addLine(to: CGPoint(x: 0, y: h))
-            path.addLine(to: CGPoint(x: w, y: h))
-            // 弧状の窪み
-            path.addQuadCurve(to: CGPoint(x: 0, y: 0), control: CGPoint(x: w * 0.7, y: h * 0.7))
+            path.addLine(to: CGPoint(x: 0, y: rect.height))
+            path.addLine(to: CGPoint(x: rect.width, y: rect.height))
+            
+            // 凹状の斜辺: リングの中心から半径 buttonRadius の円弧を描く
+            // ボタンの矩形内での中心座標を計算
+            let relCenter = CGPoint(x: screenCenter.x - rect.minX, y: screenCenter.y - rect.minY)
+            path.addArc(center: relCenter, radius: buttonRadius,
+                        startAngle: .degrees(135), // 左下方向
+                        endAngle: .degrees(180),   // 真左方向
+                        clockwise: true)
+            
         case .bottomRight:
-            path.move(to: CGPoint(x: w, y: 0))
-            path.addLine(to: CGPoint(x: w, y: h))
-            path.addLine(to: CGPoint(x: 0, y: h))
-            // 弧状の窪み
-            path.addQuadCurve(to: CGPoint(x: w, y: 0), control: CGPoint(x: w * 0.3, y: h * 0.7))
+            path.move(to: CGPoint(x: rect.width, y: 0))
+            path.addLine(to: CGPoint(x: rect.width, y: rect.height))
+            path.addLine(to: CGPoint(x: 0, y: rect.height))
+            
+            let relCenter = CGPoint(x: screenCenter.x - rect.minX, y: screenCenter.y - rect.minY)
+            path.addArc(center: relCenter, radius: buttonRadius,
+                        startAngle: .degrees(45), // 右下方向
+                        endAngle: .degrees(0),  // 真右方向
+                        clockwise: false)
         }
+        
+        path.closeSubpath()
         return path
     }
 }
