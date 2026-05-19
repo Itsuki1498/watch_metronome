@@ -17,18 +17,18 @@ enum BeatIntensity {
     case silence  // 無音
 }
 
-/// 演奏モード
+/// 演奏モード（順序：全て -> 強中 -> 強のみ）
 enum RhythmMode: Int, CaseIterable {
-    case strongOnly = 0 // 強拍のみ
-    case strongMedium = 1 // 強拍 + 中拍
-    case all = 2         // 全ての拍
+    case all = 0         // 全ての拍
+    case strongMedium = 1 // 強拍 + 中拍 (弱拍ミュート)
+    case strongOnly = 2   // 強拍のみ (中・弱拍ミュート)
 }
 
-/// メトロノームのリズム生成を担うエンジン
+/// メトロノームのリズム生成を担う engine
 @Observable
 final class MetronomeEngine {
     
-    // MARK: - Properties (設定値)
+    // MARK: - Properties
     
     var bpm: Int = 120 {
         didSet { updateConstants() }
@@ -46,7 +46,6 @@ final class MetronomeEngine {
         didSet { updateConstants() }
     }
     
-    /// 現在のリズムモード
     var rhythmMode: RhythmMode = .all
     
     private(set) var isPlaying: Bool = false
@@ -150,7 +149,7 @@ final class MetronomeEngine {
         let tickIndex = currentTick - 1
         let logicalBeat = Double(tickIndex) / Double(outerStep) + 1.0
         
-        // --- 音楽的階層ロジック ---
+        // 強弱判定
         var rawIntensity: BeatIntensity
         if tickIndex == 0 && currentNumerator != 0 {
             rawIntensity = .strong
@@ -164,15 +163,15 @@ final class MetronomeEngine {
             else { rawIntensity = .silence }
         }
         
-        // --- リズムモードによるフィルタリング ---
+        // モードによるフィルタリング
         var finalIntensity: BeatIntensity = rawIntensity
         switch mode {
-        case .strongOnly:
-            if rawIntensity != .strong { finalIntensity = .silence }
-        case .strongMedium:
-            if rawIntensity == .weak { finalIntensity = .silence }
         case .all:
             break
+        case .strongMedium:
+            if rawIntensity == .weak { finalIntensity = .silence }
+        case .strongOnly:
+            if rawIntensity != .strong { finalIntensity = .silence }
         }
         
         onTick?(logicalBeat, finalIntensity, tickTime)

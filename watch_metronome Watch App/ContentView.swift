@@ -14,7 +14,7 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
-            // 背景レイヤー: 精密な二重円環
+            // 背景レイヤー: 精密な同期UI
             TimelineView(.animation(minimumInterval: 0.016)) { context in
                 ModernPieIndicatorView(
                     viewModel: viewModel,
@@ -76,39 +76,41 @@ struct ContentView: View {
             
             Spacer()
             
-            // 下部：中央カプセル型ボタン
+            // 下部：細身になった中央カプセル型ボタン
             HStack(spacing: 2) {
-                // 左側：モード切り替え（U字 ⊂）
+                // 左側：モード切り替え（細身カプセル左）
                 Button {
                     viewModel.nextRhythmMode()
                     WKInterfaceDevice.current().play(.click)
                 } label: {
                     ZStack {
                         CapsuleHalf(side: .left)
-                            .fill(Color.blue.opacity(0.15))
+                            .fill(Color.blue.opacity(0.12))
                         Image(systemName: modeIcon(viewModel.rhythmMode))
-                            .font(.system(size: 16))
+                            .font(.system(size: 15))
                             .foregroundStyle(viewModel.rhythmMode == .strongOnly ? .orange : .blue)
+                            .offset(x: -2)
                     }
                 }
                 .buttonStyle(.plain)
-                .frame(width: 60, height: 40)
+                .frame(width: 50, height: 34) // さらに細長く
                 
-                // 右側：再生/停止（U字 ⊃）
+                // 右側：再生/停止（細身カプセル右）
                 Button {
                     viewModel.togglePlayback()
                     WKInterfaceDevice.current().play(.click)
                 } label: {
                     ZStack {
                         CapsuleHalf(side: .right)
-                            .fill(viewModel.isPlaying ? Color.red.opacity(0.15) : Color.green.opacity(0.15))
+                            .fill(viewModel.isPlaying ? Color.red.opacity(0.12) : Color.green.opacity(0.12))
                         Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
-                            .font(.system(size: 18))
+                            .font(.system(size: 16))
                             .foregroundStyle(viewModel.isPlaying ? .red : .green)
+                            .offset(x: 2)
                     }
                 }
                 .buttonStyle(.plain)
-                .frame(width: 60, height: 40)
+                .frame(width: 50, height: 34) // さらに細長く
             }
             .padding(.bottom, 10)
         }
@@ -117,9 +119,9 @@ struct ContentView: View {
     
     private func modeIcon(_ mode: RhythmMode) -> String {
         switch mode {
-        case .strongOnly:   return "speaker.fill"
-        case .strongMedium: return "speaker.wave.1.fill"
         case .all:          return "speaker.wave.3.fill"
+        case .strongMedium: return "speaker.wave.1.fill"
+        case .strongOnly:   return "speaker.fill"
         }
     }
     
@@ -173,7 +175,101 @@ struct CapsuleHalf: Shape {
 }
 
 struct ModernPieIndicatorView: View {
-...
+    let viewModel: MetronomeViewModel
+    let date: Date
+    
+    var body: some View {
+        Canvas { context, size in
+            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            let radius = min(size.width, size.height) / 2
+            let outerRadius = radius - 4
+            let innerRadius = outerRadius - 12
+            
+            let isPlaying = viewModel.isPlaying
+            let rawProgress = isPlaying ? currentMeasureProgress() : 0.0
+            let needleProgress = rawProgress.truncatingRemainder(dividingBy: 1.0)
+            let safeProgress = needleProgress > 0.999 ? 0.0 : needleProgress
+            let currentAngle = (safeProgress * 360.0) - 90.0
+            
+            context.stroke(Circle().path(in: CGRect(x: center.x - outerRadius, y: center.y - outerRadius, width: outerRadius * 2, height: outerRadius * 2)), with: .color(.white.opacity(0.05)), lineWidth: 1)
+            
+            if viewModel.numerator > 0 {
+                // 1. 外側リング (分母基準)
+                let outerCount = Double(max(1, viewModel.numerator))
+                let outerStep = 1.0 / outerCount
+                for i in 0..<Int(outerCount) {
+                    let rangeStart = Double(i) * outerStep
+                    let rangeEnd = Double(i + 1) * outerStep
+                    drawArc(context: context, center: center, radius: outerRadius, start: rangeStart * 360 - 89.5, end: rangeEnd * 360 - 90.5, color: .white.opacity(0.04), width: 2)
+                    
+                    if isPlaying && safeProgress >= rangeStart && safeProgress < rangeEnd {
+                        let color = (i == 0) ? Color.orange : Color.cyan
+                        let segStart = max(rangeStart * 360 - 90, currentAngle)
+                        let segEnd = rangeEnd * 360 - 90.5
+                        if segStart < segEnd {
+                            drawArc(context: context, center: center, radius: outerRadius, start: segStart, end: segEnd, color: color, width: 8)
+                        }
+                    }
+                }
+                
+                // 2. 内側リング (基準音符準拠)
+                let totalTicks = Double(max(1, viewModel.totalTicksInMeasure))
+                let ticksPerRef = Double(max(1, viewModel.ticksPerRefNote))
+                let mediumBeatCount = Int(ceil(totalTicks / ticksPerRef))
+                
+                for i in 0..<mediumBeatCount {
+                    let startTick = Double(i) * ticksPerRef
+                    let endTick = min(totalTicks, Double(i + 1) * ticksPerRef)
+                    let start = startTick / totalTicks
+                    let end = endTick / totalTicks
+                    
+                    drawArc(context: context, center: center, radius: innerRadius, start: start * 360 - 88.5, end: end * 360 - 91.5, color: .blue.opacity(0.06), width: 1.5)
+                    
+                    if isPlaying && safeProgress >= start && safeProgress < end {
+                        let segStart = max(start * 360 - 90, currentAngle)
+                        let segEnd = end * 360 - 91
+                        if segStart < segEnd {
+                            drawArc(context: context, center: center, radius: innerRadius, start: segStart, end: segEnd, color: .white.opacity(0.6), width: 5)
+                        }
+                    }
+                }
+            } else {
+                // 0拍子（フラット）
+                drawArc(context: context, center: center, radius: outerRadius, start: -90, end: 270, color: .white.opacity(0.04), width: 2)
+                if isPlaying {
+                    drawArc(context: context, center: center, radius: outerRadius, start: currentAngle, end: 269.5, color: .cyan, width: 8)
+                }
+                let ticksPerRef = Double(max(1, viewModel.ticksPerRefNote))
+                let totalTicks = Double(max(1, viewModel.totalTicksInMeasure))
+                let mediumBeatCount = Int(ceil(totalTicks / ticksPerRef))
+                for i in 0..<mediumBeatCount {
+                    let start = (Double(i) * ticksPerRef) / totalTicks
+                    let end = min(totalTicks, (Double(i + 1) * ticksPerRef)) / totalTicks
+                    drawArc(context: context, center: center, radius: innerRadius, start: start * 360 - 88.5, end: end * 360 - 91.5, color: .blue.opacity(0.06), width: 1.5)
+                    if isPlaying && safeProgress >= start && safeProgress < end {
+                        drawArc(context: context, center: center, radius: innerRadius, start: max(start * 360 - 90, currentAngle), end: end * 360 - 91, color: .white.opacity(0.6), width: 5)
+                    }
+                }
+            }
+            
+            if isPlaying {
+                var path = Path()
+                path.move(to: center)
+                let endPoint = CGPoint(x: center.x + outerRadius * cos(currentAngle * .pi / 180), y: center.y + outerRadius * sin(currentAngle * .pi / 180))
+                path.addLine(to: endPoint)
+                context.stroke(path, with: .color(.white.opacity(0.9)), lineWidth: 1.5)
+                context.fill(Circle().path(in: CGRect(x: endPoint.x - 2, y: endPoint.y - 2, width: 4, height: 4)), with: .color(.white))
+            }
+        }
+    }
+    
+    private func drawArc(context: GraphicsContext, center: CGPoint, radius: CGFloat, start: Double, end: Double, color: Color, width: CGFloat) {
+        guard end > start else { return }
+        var path = Path()
+        path.addArc(center: center, radius: radius, startAngle: .degrees(start), endAngle: .degrees(end), clockwise: false)
+        context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: width, lineCap: .butt))
+    }
+    
     private func currentMeasureProgress() -> Double {
         let now = DispatchTime.now()
         let last = viewModel.lastTickTime
@@ -182,11 +278,6 @@ struct ModernPieIndicatorView: View {
         
         let beatIdx = viewModel.currentBeat - 1.0
         let totalTicks = Double(max(1, viewModel.totalTicksInMeasure))
-        // 1パルスあたりの進捗 (1.0 / totalTicks) に基づいて計算
-        let currentPulseProgress = (beatIdx * (1.0 / (totalTicks / Double(viewModel.numerator)))) + (elapsed / viewModel.tickInterval)
-        // 簡略化：(現在の論理的な拍位置 + 経過率) / 総パルス数 
-        // ただし logicalBeat は既に ticksPerOuterBeat を考慮済み
-        
         let beatProgress = (beatIdx * Double(viewModel.ticksPerOuterBeat)) + (elapsed / viewModel.tickInterval)
         return beatProgress / totalTicks
     }
