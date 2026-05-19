@@ -14,19 +14,21 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
-            // 背景レイヤー: 精密な同期UI
+            // 1. 背景レイヤー: 画面いっぱいに広がる精密な円環
             TimelineView(.animation(minimumInterval: 0.016)) { context in
                 ModernPieIndicatorView(
                     viewModel: viewModel,
                     date: context.date
                 )
             }
-            .padding(12) // パディングを増やして画面端（特に上部）の見切れを防止
+            .padding(2) // 最小限の余白で画面最大まで広げる
+            .ignoresSafeArea()
             
             if !viewModel.isSystemReady {
                 ProgressView()
                     .tint(.orange)
             } else {
+                // 2. 前面レイヤー: フローティング操作UI
                 mainControlUI
             }
         }
@@ -37,36 +39,38 @@ struct ContentView: View {
     
     private var mainControlUI: some View {
         VStack(spacing: 0) {
-            Spacer()
-            
-            VStack(spacing: 1) {
-                HStack(alignment: .center, spacing: 2) {
+            // 上部：BPM & 音価（少し透過させて背景を活かす）
+            VStack(spacing: 0) {
+                HStack(alignment: .center, spacing: 4) {
                     settingItem(target: .noteValue, label: viewModel.currentNoteName, size: 14)
                         .digitalCrownRotation($viewModel.displayNoteValueIndex, from: 0, through: Double(viewModel.noteValueOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                     
                     Text("=")
                         .font(.system(size: 10, weight: .black))
-                        .foregroundStyle(.orange.opacity(0.8))
+                        .foregroundStyle(.orange.opacity(0.6))
                     
-                    settingItem(target: .bpm, label: "\(viewModel.bpm)", size: 44)
+                    settingItem(target: .bpm, label: "\(viewModel.bpm)", size: 48)
                         .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
                 Text("BPM")
                     .font(.system(size: 8, weight: .black))
-                    .foregroundStyle(.secondary.opacity(0.6))
+                    .foregroundStyle(.secondary.opacity(0.5))
             }
-            .padding(.top, 12) // リングとの重なりを調整
+            .padding(.top, 25) // ステータスバーとの兼ね合い
             
-            HStack(spacing: 12) {
-                HStack(spacing: 4) {
-                    settingItem(target: .numerator, label: "\(viewModel.numerator)", size: 22)
+            Spacer()
+            
+            // 中央：拍子設定（コンパクトにまとめてリングの視認性を確保）
+            HStack(spacing: 10) {
+                HStack(spacing: 2) {
+                    settingItem(target: .numerator, label: "\(viewModel.numerator)", size: 20)
                         .digitalCrownRotation($viewModel.displayNumerator, from: 0, through: 32, by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                     
                     Text("/")
-                        .font(.system(size: 16, weight: .ultraLight))
-                        .foregroundStyle(.secondary.opacity(0.5))
+                        .font(.system(size: 14, weight: .ultraLight))
+                        .foregroundStyle(.secondary.opacity(0.4))
                     
-                    settingItem(target: .denominator, label: "\(viewModel.denominator)", size: 22)
+                    settingItem(target: .denominator, label: "\(viewModel.denominator)", size: 20)
                         .digitalCrownRotation($viewModel.displayDenominatorIndex, from: 0, through: Double(viewModel.denominatorOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
                 
@@ -75,43 +79,41 @@ struct ContentView: View {
                     WKInterfaceDevice.current().play(.click)
                 } label: {
                     Image(systemName: viewModel.isSimplifiedMode ? "eye.slash.fill" : "eye.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(viewModel.isSimplifiedMode ? .orange : .blue.opacity(0.8))
+                        .font(.system(size: 12))
+                        .foregroundStyle(viewModel.isSimplifiedMode ? .orange : .blue.opacity(0.6))
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.top, 2)
             
             Spacer()
             
+            // 下部：再生ボタン（角丸を強くしてモダンに）
             Button {
                 viewModel.togglePlayback()
             } label: {
                 Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
                     .font(.title3)
             }
-            .frame(width: 70, height: 32)
-            .tint(viewModel.isPlaying ? .red : .green)
+            .frame(width: 60, height: 32)
+            .tint(viewModel.isPlaying ? .red.opacity(0.7) : .green.opacity(0.7))
             .buttonStyle(.borderedProminent)
             .clipShape(Capsule())
-            .padding(.bottom, 2)
+            .padding(.bottom, 15)
         }
-        .padding(.horizontal)
     }
     
     private func settingItem(target: MetronomeViewModel.EditTarget, label: String, size: CGFloat = 20) -> some View {
         Text(label)
             .font(.system(size: size, weight: .black, design: .rounded))
-            .foregroundStyle(focusedField == target ? .white : .primary.opacity(0.9))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1)
+            .foregroundStyle(focusedField == target ? .white : .primary.opacity(0.7))
+            .padding(.horizontal, 4)
             .background(
                 ZStack {
                     if focusedField == target {
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.blue.opacity(0.3))
+                            .fill(Color.blue.opacity(0.2))
                         RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.cyan, lineWidth: 1)
+                            .stroke(Color.cyan.opacity(0.5), lineWidth: 1)
                     }
                 }
             )
@@ -133,15 +135,8 @@ struct ModernPieIndicatorView: View {
         Canvas { context, size in
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
             let radius = min(size.width, size.height) / 2
-            let outerRadius = radius - 5 // 半径をさらに小さくして確実に画面内に収める
-            let innerRadius = outerRadius - 10
-            
-            // 1. 静的ベースライン
-            context.stroke(
-                Circle().path(in: CGRect(x: center.x - outerRadius, y: center.y - outerRadius, width: outerRadius * 2, height: outerRadius * 2)),
-                with: .color(.white.opacity(0.05)),
-                lineWidth: 1
-            )
+            let outerRadius = radius - 2 // 画面端ギリギリまで広げる
+            let innerRadius = outerRadius - 6 // リングの幅を少し細くして洗練させる
             
             let isPlaying = viewModel.isPlaying
             let numerator = viewModel.numerator
@@ -151,25 +146,26 @@ struct ModernPieIndicatorView: View {
             let currentAngle = (currentProgress * 360.0) - 90.0
             
             if numerator > 0 {
-                // 2. 外側リング
+                // 1. 外側リング: 画面のフレームのように配置
                 let stepAngle = 360.0 / totalTicks
                 for i in 0..<numerator {
                     let startAngle = Double(i) * stepAngle - 90
                     let endAngle = Double(i + 1) * stepAngle - 90
                     let isCurrent = isPlaying && (i + 1) == viewModel.currentBeat
                     
-                    drawArc(context: context, center: center, radius: outerRadius, start: startAngle + 1, end: endAngle - 1, color: .white.opacity(0.05), width: 2)
+                    // 背景の微かな刻み
+                    drawArc(context: context, center: center, radius: outerRadius, start: startAngle + 0.5, end: endAngle - 0.5, color: .white.opacity(0.03), width: 1.5)
                     
                     if isCurrent {
                         let effectiveStartAngle = max(startAngle, currentAngle)
-                        if effectiveStartAngle < endAngle - 1 {
+                        if effectiveStartAngle < endAngle - 0.5 {
                             let color = colorForIntensity(viewModel.currentIntensity)
-                            drawArc(context: context, center: center, radius: outerRadius, start: effectiveStartAngle + 1, end: endAngle - 1, color: color, width: 6)
+                            drawArc(context: context, center: center, radius: outerRadius, start: effectiveStartAngle + 0.5, end: endAngle - 0.5, color: color, width: 5)
                         }
                     }
                 }
                 
-                // 3. 内側リング (中拍)
+                // 2. 内側リング: 基準音符（中拍）
                 let ticksPerMedium = Double(max(1, viewModel.ticksPerMediumBeat))
                 let mediumBeatCount = Int(ceil(totalTicks / ticksPerMedium))
                 
@@ -179,18 +175,16 @@ struct ModernPieIndicatorView: View {
                     let startAngle = (startTick / totalTicks) * 360.0 - 90.0
                     let endAngle = (endTick / totalTicks) * 360.0 - 90.0
                     
-                    drawArc(context: context, center: center, radius: innerRadius, start: startAngle + 1.5, end: endAngle - 1.5, color: .cyan.opacity(0.05), width: 1.5)
-                    
                     if isPlaying && currentAngle >= startAngle && currentAngle < endAngle {
                         let effectiveStartAngle = max(startAngle, currentAngle)
-                        if effectiveStartAngle < endAngle - 1.5 {
-                            drawArc(context: context, center: center, radius: innerRadius, start: effectiveStartAngle + 1.5, end: endAngle - 1.5, color: .cyan.opacity(0.4), width: 4)
+                        if effectiveStartAngle < endAngle - 1 {
+                            drawArc(context: context, center: center, radius: innerRadius, start: effectiveStartAngle + 1, end: endAngle - 1, color: .cyan.opacity(0.3), width: 3)
                         }
                     }
                 }
             }
             
-            // 4. スキャン針
+            // 3. 極細のスキャン針
             if isPlaying {
                 let angle = currentAngle
                 var path = Path()
@@ -200,8 +194,8 @@ struct ModernPieIndicatorView: View {
                     y: center.y + outerRadius * sin(angle * .pi / 180)
                 )
                 path.addLine(to: endPoint)
-                context.stroke(path, with: .color(.white), lineWidth: 1.5)
-                context.fill(Circle().path(in: CGRect(x: endPoint.x - 2, y: endPoint.y - 2, width: 4, height: 4)), with: .color(.white))
+                context.stroke(path, with: .color(.white.opacity(0.8)), lineWidth: 1.0)
+                context.fill(Circle().path(in: CGRect(x: endPoint.x - 1.5, y: endPoint.y - 1.5, width: 3, height: 3)), with: .color(.white))
             }
         }
     }
