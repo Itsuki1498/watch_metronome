@@ -102,6 +102,7 @@ final class MetronomeViewModel {
     var denominator: Int { engine.denominator }
     var totalTicksInMeasure: Int { engine.totalTicksInMeasure }
     var ticksPerOuterBeat: Int { engine.ticksPerOuterBeat }
+    var ticksPerRefNote: Int { engine.ticksPerRefNote }
     var tickInterval: Double { engine.internalInterval }
     
     let denominatorOptions = [2, 4, 8, 16, 32]
