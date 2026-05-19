@@ -14,6 +14,7 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
+            // 背景レイヤー: 画面を最大限に使った精密な円環
             TimelineView(.animation(minimumInterval: 0.016)) { context in
                 ModernPieIndicatorView(
                     viewModel: viewModel,
@@ -27,6 +28,7 @@ struct ContentView: View {
                 ProgressView()
                     .tint(.orange)
             } else {
+                // 前面レイヤー: 左右分散型の操作UI
                 mainControlUI
             }
         }
@@ -37,8 +39,7 @@ struct ContentView: View {
     
     private var mainControlUI: some View {
         VStack(spacing: 0) {
-            Spacer()
-            
+            // 1. 上部：BPM & 音価（少し高めに配置）
             VStack(spacing: -2) {
                 HStack(alignment: .center, spacing: 6) {
                     settingItem(target: .noteValue, label: viewModel.currentNoteName, size: 18, hPadding: 6)
@@ -56,47 +57,62 @@ struct ContentView: View {
                     .kerning(1.5)
                     .foregroundStyle(.secondary.opacity(0.8))
             }
-            .padding(.top, 28)
+            .padding(.top, 25)
             
             Spacer()
             
-            HStack(spacing: 12) {
-                HStack(spacing: 4) {
-                    settingItem(target: .numerator, label: "\(viewModel.numerator)", size: 24, hPadding: 6)
-                        .digitalCrownRotation($viewModel.displayNumerator, from: 0, through: 32, by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
-                    
-                    Text("/")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(.secondary.opacity(0.5))
-                    
-                    settingItem(target: .denominator, label: "\(viewModel.denominator)", size: 24, hPadding: 6)
-                        .digitalCrownRotation($viewModel.displayDenominatorIndex, from: 0, through: Double(viewModel.denominatorOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
-                }
+            // 2. 中央：拍子設定（中央にゆったり配置）
+            HStack(spacing: 4) {
+                settingItem(target: .numerator, label: "\(viewModel.numerator)", size: 28, hPadding: 8)
+                    .digitalCrownRotation($viewModel.displayNumerator, from: 0, through: 32, by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                 
+                Text("/")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(.secondary.opacity(0.5))
+                
+                settingItem(target: .denominator, label: "\(viewModel.denominator)", size: 28, hPadding: 8)
+                    .digitalCrownRotation($viewModel.displayDenominatorIndex, from: 0, through: Double(viewModel.denominatorOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
+            }
+            
+            Spacer()
+            
+            // 3. 下部：分散配置されたコントロール
+            HStack {
+                // 左下：モード切り替え
                 Button {
                     viewModel.isSimplifiedMode.toggle()
                     WKInterfaceDevice.current().play(.click)
                 } label: {
-                    Image(systemName: viewModel.isSimplifiedMode ? "eye.slash.fill" : "eye.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(viewModel.isSimplifiedMode ? .orange : .blue.opacity(0.8))
+                    ZStack {
+                        Circle()
+                            .fill(Color.gray.opacity(0.2))
+                            .frame(width: 36, height: 36)
+                        Image(systemName: viewModel.isSimplifiedMode ? "eye.slash.fill" : "eye.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(viewModel.isSimplifiedMode ? .orange : .blue)
+                    }
+                }
+                .buttonStyle(.plain)
+                
+                Spacer()
+                
+                // 右下：再生/停止
+                Button {
+                    viewModel.togglePlayback()
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(viewModel.isPlaying ? Color.red.opacity(0.2) : Color.green.opacity(0.2))
+                            .frame(width: 44, height: 44)
+                        Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
+                            .font(.system(size: 20))
+                            .foregroundStyle(viewModel.isPlaying ? .red : .green)
+                    }
                 }
                 .buttonStyle(.plain)
             }
-            
-            Spacer()
-            
-            Button {
-                viewModel.togglePlayback()
-            } label: {
-                Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
-                    .font(.title2)
-            }
-            .frame(width: 60, height: 32)
-            .tint(viewModel.isPlaying ? .red.opacity(0.8) : .green.opacity(0.8))
-            .buttonStyle(.borderedProminent)
-            .clipShape(Capsule())
-            .padding(.bottom, 12)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 5)
         }
         .padding(.horizontal)
     }
@@ -110,10 +126,11 @@ struct ContentView: View {
             .background(
                 ZStack {
                     if focusedField == target {
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
                             .fill(Color.blue.opacity(0.2))
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .stroke(Color.cyan, lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(Color.cyan, lineWidth: 1.5)
+                            .shadow(color: .cyan.opacity(0.3), radius: 2)
                     }
                 }
             )
@@ -141,10 +158,7 @@ struct ModernPieIndicatorView: View {
             
             let isPlaying = viewModel.isPlaying
             let rawProgress = isPlaying ? currentMeasureProgress() : 0.0
-            
-            // --- 修正：境界フリッカー防止ガード (12時を跨ぐ瞬間の矛盾を解消) ---
             let needleProgress = rawProgress.truncatingRemainder(dividingBy: 1.0)
-            // needleProgressが極めて1.0に近い場合、計算上0.0に丸めることで逆走判定を防ぐ
             let safeProgress = needleProgress > 0.999 ? 0.0 : needleProgress
             let currentAngle = (safeProgress * 360.0) - 90.0
             
