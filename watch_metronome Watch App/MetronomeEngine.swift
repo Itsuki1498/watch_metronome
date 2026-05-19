@@ -35,6 +35,7 @@ final class MetronomeEngine {
         didSet { updateConstants() }
     }
     
+    /// 四分音符を 1.0 とした基準音価の倍率
     var referenceNoteMultiplier: Double = 1.0 {
         didSet { updateConstants() }
     }
@@ -49,19 +50,28 @@ final class MetronomeEngine {
     private let queue = DispatchQueue(label: "com.watchmetronome.engine", qos: .userInteractive)
     private let lock = NSRecursiveLock()
     
-    /// 拍ごとの通知用クロージャ (拍数, 強さ, 発火時刻)
     var onTick: ((_ beat: Int, _ intensity: BeatIntensity, _ tickTime: DispatchTime) -> Void)?
     
     // MARK: - Logic Constants (UI側で参照可能にする)
     
+    /// 最小単位（denominator）が刻まれる間隔（秒）
     private(set) var internalInterval: Double = 0.5
+    /// 基準音符（BPMの単位）が最小単位何個分か
     private(set) var ticksPerMediumBeat: Int = 1
 
     private func updateConstants() {
+        // 1. 最小単位（分母）の音価（例: 8分音符なら 0.5）
         let unitNoteValue = 4.0 / Double(denominator)
-        let internalBpm = Double(bpm) * (referenceNoteMultiplier / unitNoteValue)
+        
+        // 2. 基準音符の中に最小単位がいくつ入るか（中拍の間隔）
+        // 例: 基準が付点4分(1.5)、分母が8(0.5) のとき 1.5 / 0.5 = 3個
         ticksPerMediumBeat = max(1, Int(round(referenceNoteMultiplier / unitNoteValue)))
-        internalInterval = 60.0 / internalBpm
+        
+        // 3. 内部BPMの計算
+        // 基準音符が1分間に BPM回 鳴るということは、1つの中拍の間隔は 60.0 / BPM 秒。
+        // 最小単位の間隔は、それを ticksPerMediumBeat で割ったもの。
+        let mediumBeatInterval = 60.0 / Double(bpm)
+        internalInterval = mediumBeatInterval / Double(ticksPerMediumBeat)
         
         if isPlaying { updateTimerSchedule(isRestart: true) }
     }
@@ -75,8 +85,11 @@ final class MetronomeEngine {
         
         isPlaying = true
         tickCount = 0
-        lastTickTime = .now()
         updateConstants()
+        
+        // 最初の1拍目が100ms後に鳴るように予定を立てる
+        let deadline = DispatchTime.now() + .milliseconds(100)
+        lastTickTime = deadline
         
         if timer == nil {
             timer = DispatchSource.makeTimerSource(queue: queue)
@@ -86,7 +99,7 @@ final class MetronomeEngine {
             timer?.resume()
         }
         
-        updateTimerSchedule(isRestart: false)
+        timer?.schedule(deadline: deadline, repeating: internalInterval, leeway: .nanoseconds(0))
     }
     
     func stop() {
@@ -96,23 +109,17 @@ final class MetronomeEngine {
         timer?.cancel()
         timer = nil
     }
+    
     private func updateTimerSchedule(isRestart: Bool) {
-        let interval = 60.0 / Double(bpm)
-
-        let deadline: DispatchTime
-        if isRestart {
-            // BPM変更時：最後に鳴った時刻 + 新しい間隔
-            let nextTime = lastTickTime + interval
-            deadline = nextTime < .now() ? .now() : nextTime
-        } else {
-            // 開始時：100ms後に最初の1拍目を予約
-            deadline = .now() + .milliseconds(100)
-            // 修正：lastTickTimeを未来のdeadlineそのものに設定し、
-            // それまでは進捗計算が0（ガードにかかる）になるようにします
-            lastTickTime = deadline
-        }
-        timer?.schedule(deadline: deadline, repeating: interval, leeway: .nanoseconds(0))
+        guard isPlaying else { return }
+        
+        // 現在の周期を壊さないよう、次の予定時刻を計算
+        let nextTime = lastTickTime + internalInterval
+        let deadline = nextTime < .now() ? .now() : nextTime
+        
+        timer?.schedule(deadline: deadline, repeating: internalInterval, leeway: .nanoseconds(0))
     }
+    
     private func tick() {
         let tickTime = DispatchTime.now()
         lock.lock()
@@ -133,13 +140,10 @@ final class MetronomeEngine {
         let totalTicksInMeasure = max(1, currentNumerator)
         let logicalBeat = ((currentTick - 1) % totalTicksInMeasure) + 1
         
+        // 強弱判定
         var intensity: BeatIntensity
         if currentNumerator == 0 {
-            if (currentTick - 1) % currentTicksPerMedium == 0 {
-                intensity = .medium
-            } else {
-                intensity = .weak
-            }
+            intensity = (currentTick - 1) % currentTicksPerMedium == 0 ? .medium : .weak
         } else if logicalBeat == 1 {
             intensity = .strong
         } else if (logicalBeat - 1) % currentTicksPerMedium == 0 {
@@ -148,6 +152,7 @@ final class MetronomeEngine {
             intensity = .weak
         }
         
+        // 通知
         if simplified {
             if intensity == .strong {
                 onTick?(logicalBeat, .strong, tickTime)
