@@ -2,7 +2,8 @@
   "images" : [
     {
       "idiom" : "universal",
-      "filename" : "note_half.svg"
+      "filename" : "note_half.png",
+      "scale" : "1x"
     }
   ],
   "info" : {
@@ -10,7 +11,6 @@
     "author" : "xcode"
   },
   "properties" : {
-    "preserves-vector-data" : true,
     "template-rendering-intent" : "template"
   }
 }
