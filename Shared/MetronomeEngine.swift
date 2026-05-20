@@ -1,19 +1,17 @@
 //
 //  MetronomeEngine.swift
-//  watch_metronome Watch App
+//  watch_metronome
 //
 //  Created by Gemini on 2026/05/18.
 //
 
 import Foundation
-import Observation
-import WatchKit
 
 /// 拍の強さ
 enum BeatIntensity {
-    case strong   // 強拍
-    case medium   // 中拍
-    case weak     // 弱拍
+    case strong   // 強拍 (小節頭 or グループ頭)
+    case medium   // 中拍 (拍の頭)
+    case weak     // 弱拍 (裏拍等)
     case silence  // 無音
 }
 
@@ -26,7 +24,6 @@ enum RhythmMode: Int, CaseIterable {
 
 /// メトロノームのリズム生成を担う engine
 @available(watchOS 10.6, iOS 16.7, *)
-@Observable
 final class MetronomeEngine {
     
     // MARK: - Properties
@@ -36,10 +33,20 @@ final class MetronomeEngine {
     }
     
     var numerator: Int = 4 {
-        didSet { updateConstants() }
+        didSet { 
+            // 外部から分子が変えられたら、単一の拍グループとしてパターンをリセット
+            beatPattern = [numerator]
+            updateConstants()
+        }
     }
     
     var denominator: Int = 4 {
+        didSet { updateConstants() }
+    }
+    
+    /// 複合拍子（Mixed Meter）をサポートするためのパターン
+    /// 例: [3, 2] = 5拍子 (3+2), [2, 2, 3] = 7拍子 (2+2+3)
+    var beatPattern: [Int] = [4] {
         didSet { updateConstants() }
     }
     
@@ -71,7 +78,10 @@ final class MetronomeEngine {
         let unitRef = referenceNoteMultiplier
         let pulseUnit = 0.125 
         
-        totalTicksInMeasure = max(1, Int(round((unitDenom * Double(numerator)) / pulseUnit)))
+        // パターンの合計を現在の分子とする
+        let currentNumerator = beatPattern.reduce(0, +)
+        
+        totalTicksInMeasure = max(1, Int(round((unitDenom * Double(currentNumerator)) / pulseUnit)))
         ticksPerOuterBeat = max(1, Int(round(unitDenom / pulseUnit)))
         ticksPerRefNote = max(1, Int(round(unitRef / pulseUnit)))
         
@@ -139,7 +149,7 @@ final class MetronomeEngine {
         let outerStep = ticksPerOuterBeat
         let refStep = ticksPerRefNote
         let mode = rhythmMode
-        let currentNumerator = numerator
+        let pattern = beatPattern
         
         let unitDenom = 4.0 / Double(denominator)
         let unitRef = referenceNoteMultiplier
@@ -150,10 +160,20 @@ final class MetronomeEngine {
         let tickIndex = currentTick - 1
         let logicalBeat = Double(tickIndex) / Double(outerStep) + 1.0
         
-        // 強弱判定
+        // --- 複合拍子アクセントロジック ---
+        // 累積カウントでグループの頭を特定
+        var groupHeadTicks: [Int] = [0]
+        var currentSum = 0
+        for p in pattern.dropLast() {
+            currentSum += p * outerStep
+            groupHeadTicks.append(currentSum)
+        }
+        
         var rawIntensity: BeatIntensity
-        if tickIndex == 0 && currentNumerator != 0 {
-            rawIntensity = .strong
+        if tickIndex == 0 {
+            rawIntensity = .strong // 小節の頭
+        } else if groupHeadTicks.contains(tickIndex) {
+            rawIntensity = .strong // グループの頭も強拍として扱う（または必要ならミディアム）
         } else if isRefMultiple {
             if tickIndex % refStep == 0 { rawIntensity = .medium }
             else if tickIndex % outerStep == 0 { rawIntensity = .weak }

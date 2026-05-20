@@ -6,19 +6,18 @@
 //
 
 import WatchConnectivity
-import Observation
+import Combine
 
 @available(iOS 16.7, watchOS 10.6, *)
-@Observable
-final class ConnectivityManager: NSObject, WCSessionDelegate {
+final class ConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
     static let shared = ConnectivityManager()
     
     var session: WCSession = .default
     
     // 同期したいデータ
-    var remoteBpm: Int?
-    var remoteNumerator: Int?
-    var remoteDenominator: Int?
+    @Published var remoteBpm: Int?
+    @Published var remoteNumerator: Int?
+    @Published var remoteDenominator: Int?
     
     override init() {
         super.init()

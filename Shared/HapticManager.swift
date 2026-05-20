@@ -7,14 +7,16 @@
 
 #if os(watchOS)
 import WatchKit
-#else
+#endif
+
+#if canImport(UIKit)
 import UIKit
 #endif
 
 /// デバイスの触覚フィードバック（振動）を管理するクラス
 final class HapticManager {
     
-    #if os(iOS)
+    #if canImport(UIKit) && !os(watchOS)
     private let strongGenerator = UIImpactFeedbackGenerator(style: .heavy)
     private let mediumGenerator = UIImpactFeedbackGenerator(style: .medium)
     private let weakGenerator = UIImpactFeedbackGenerator(style: .light)
@@ -30,7 +32,7 @@ final class HapticManager {
     func playStrong() {
         #if os(watchOS)
         WKInterfaceDevice.current().play(.directionUp)
-        #else
+        #elseif canImport(UIKit)
         strongGenerator.impactOccurred()
         #endif
     }
@@ -39,7 +41,7 @@ final class HapticManager {
     func playMedium() {
         #if os(watchOS)
         WKInterfaceDevice.current().play(.directionDown)
-        #else
+        #elseif canImport(UIKit)
         mediumGenerator.impactOccurred()
         #endif
     }
@@ -48,7 +50,7 @@ final class HapticManager {
     func playWeak() {
         #if os(watchOS)
         WKInterfaceDevice.current().play(.click)
-        #else
+        #elseif canImport(UIKit)
         weakGenerator.impactOccurred()
         #endif
     }

@@ -1,12 +1,12 @@
 //
 //  MetronomeViewModel.swift
-//  watch_metronome Watch App
+//  watch_metronome
 //
 //  Created by Gemini on 2026/05/18.
 //
 
 import SwiftUI
-import Observation
+import Combine
 
 /// 音価の定義
 struct NoteValue: Hashable {
@@ -19,31 +19,36 @@ struct NoteValue: Hashable {
 
 /// メトロノームの画面状態と操作を管理するViewModel
 @available(watchOS 10.6, iOS 16.7, *)
-@Observable
-final class MetronomeViewModel {
+final class MetronomeViewModel: ObservableObject {
     
     // MARK: - Properties
     
     private let engine = MetronomeEngine()
     private let hapticManager = HapticManager()
+    private var cancellables = Set<AnyCancellable>()
     
-    var isSystemReady: Bool = false
+    @Published var isSystemReady: Bool = false
     
     enum EditTarget: Hashable {
-        case bpm, numerator, denominator, noteValue
+        case bpm, numerator, denominator, noteValue, beatPattern
     }
     
     /// リズムモード (全て / 強・中 / 強のみ)
     var rhythmMode: RhythmMode {
         get { engine.rhythmMode }
-        set { engine.rhythmMode = newValue }
+        set {
+            objectWillChange.send()
+            engine.rhythmMode = newValue
+        }
     }
     
     var bpm: Int {
         get { engine.bpm }
         set { 
-            if engine.bpm != newValue {
-                engine.bpm = newValue
+            let clamped = min(400, max(40, newValue))
+            if engine.bpm != clamped {
+                objectWillChange.send()
+                engine.bpm = clamped
                 syncToRemote()
             }
         }
@@ -79,6 +84,7 @@ final class MetronomeViewModel {
             if index >= 0 && index < denominatorOptions.count {
                 let newDenom = denominatorOptions[index]
                 if newDenom != engine.denominator {
+                    objectWillChange.send()
                     engine.denominator = newDenom
                     refreshValidNoteValues()
                     syncNoteValueToDenominator()
@@ -89,19 +95,22 @@ final class MetronomeViewModel {
     }
     
     var displayNoteValueIndex: Double {
-        get { Double(validNoteValueOptions.firstIndex(of: noteValueOptions[noteValueIndex]) ?? 0) }
+        get { 
+            let current = noteValueOptions[noteValueIndex]
+            return Double(validNoteValueOptions.firstIndex(where: { $0.multiplier == current.multiplier }) ?? 0)
+        }
         set { 
             let index = Int(newValue)
             if index >= 0 && index < validNoteValueOptions.count {
                 let selectedNote = validNoteValueOptions[index]
-                if let masterIndex = noteValueOptions.firstIndex(of: selectedNote) {
+                if let masterIndex = noteValueOptions.firstIndex(where: { $0.multiplier == selectedNote.multiplier }) {
                     noteValueIndex = masterIndex
                 }
             }
         }
     }
     
-    var noteValueIndex: Int = 4 {
+    @Published var noteValueIndex: Int = 4 {
         didSet {
             engine.referenceNoteMultiplier = noteValueOptions[noteValueIndex].multiplier
         }
@@ -109,13 +118,24 @@ final class MetronomeViewModel {
     
     var isPlaying: Bool { engine.isPlaying }
     
-    /// --- 同期された状態プロパティ ---
-    var currentBeat: Double = 1.0
-    var currentIntensity: BeatIntensity = .weak
-    var lastTickTime: DispatchTime = .now()
+    /// 複合拍子のパターン
+    var beatPattern: [Int] {
+        get { engine.beatPattern }
+        set {
+            objectWillChange.send()
+            engine.beatPattern = newValue
+            // syncToRemote() // パターンの同期は将来的に実装
+        }
+    }
     
-    var numerator: Int { engine.numerator }
+    var numerator: Int { beatPattern.reduce(0, +) }
     var denominator: Int { engine.denominator }
+    
+    /// --- 同期された状態プロパティ ---
+    @Published var currentBeat: Double = 1.0
+    @Published var currentIntensity: BeatIntensity = .weak
+    @Published var lastTickTime: DispatchTime = .now()
+    
     var totalTicksInMeasure: Int { engine.totalTicksInMeasure }
     var ticksPerOuterBeat: Int { engine.ticksPerOuterBeat }
     var ticksPerRefNote: Int { engine.ticksPerRefNote }
@@ -136,10 +156,34 @@ final class MetronomeViewModel {
         NoteValue(name: "32", multiplier: 0.125, imageName: "note_32nd", isDotted: false, displayHeight: 24)
     ]
     
-    var validNoteValueOptions: [NoteValue] = []
+    @Published var validNoteValueOptions: [NoteValue] = []
     
     var currentNote: NoteValue {
         noteValueOptions[noteValueIndex]
+    }
+    
+    // MARK: - Tap Tempo Logic
+    
+    private var tapTimes: [Date] = []
+    
+    func tapTempo() {
+        let now = Date()
+        tapTimes.append(now)
+        
+        // 過去2秒以上前のタップは削除
+        tapTimes = tapTimes.filter { now.timeIntervalSince($0) < 2.0 }
+        
+        if tapTimes.count >= 2 {
+            var intervals: [TimeInterval] = []
+            for i in 1..<tapTimes.count {
+                intervals.append(tapTimes[i].timeIntervalSince(tapTimes[i-1]))
+            }
+            let averageInterval = intervals.reduce(0, +) / Double(intervals.count)
+            let calculatedBpm = Int(round(60.0 / averageInterval))
+            self.bpm = calculatedBpm
+        }
+        
+        hapticManager.playWeak() // タップ時の手応え
     }
     
     // MARK: - Initialization
@@ -191,19 +235,46 @@ final class MetronomeViewModel {
     }
     
     // MARK: - Connectivity
-    
     private func setupConnectivity() {
         // ConnectivityManagerからの変更を受け取る
-        _ = withObservationTracking {
-            ConnectivityManager.shared.remoteBpm
-        } onChange: { [weak self] in
-            if let bpm = ConnectivityManager.shared.remoteBpm {
-                DispatchQueue.main.async {
-                    self?.engine.bpm = bpm
+        ConnectivityManager.shared.$remoteBpm
+            .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] bpm in
+                guard let self else { return }
+                if self.engine.bpm != bpm {
+                    self.objectWillChange.send()
+                    self.engine.bpm = bpm
                 }
             }
-            self?.setupConnectivity() // 追跡を継続
-        }
+            .store(in: &cancellables)
+
+        ConnectivityManager.shared.$remoteNumerator
+            .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] num in
+                guard let self else { return }
+                if self.engine.numerator != num {
+                    self.objectWillChange.send()
+                    self.engine.numerator = num
+                    self.refreshValidNoteValues()
+                }
+            }
+            .store(in: &cancellables)
+
+        ConnectivityManager.shared.$remoteDenominator
+            .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] den in
+                guard let self else { return }
+                if self.engine.denominator != den {
+                    self.objectWillChange.send()
+                    self.engine.denominator = den
+                    self.refreshValidNoteValues()
+                    self.syncNoteValueToDenominator()
+                }
+            }
+            .store(in: &cancellables)
     }
     
     private func syncToRemote() {
@@ -224,6 +295,7 @@ final class MetronomeViewModel {
     }
     
     func togglePlayback() {
+        objectWillChange.send()
         if engine.isPlaying {
             engine.stop()
         } else {

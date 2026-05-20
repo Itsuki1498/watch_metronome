@@ -6,11 +6,13 @@
 //
 
 import SwiftUI
+#if canImport(WatchKit)
 import WatchKit
+#endif
 
 @available(watchOS 10.6, *)
 struct ContentView: View {
-    @State private var viewModel = MetronomeViewModel()
+    @StateObject private var viewModel = MetronomeViewModel()
     @FocusState private var focusedField: MetronomeViewModel.EditTarget?
     
     var body: some View {
@@ -52,7 +54,7 @@ struct ContentView: View {
                             .frame(height: viewModel.currentNote.displayHeight)
                             .padding(2) // 欠落（クリッピング）防止用
                     }
-                    .digitalCrownRotation($viewModel.displayNoteValueIndex, from: 0, through: Double(max(0, viewModel.validNoteValueOptions.count - 1)), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
+                    .digitalCrownRotation(binding(\.displayNoteValueIndex), from: 0, through: Double(max(0, viewModel.validNoteValueOptions.count - 1)), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                     
                     Text("=")
                         .font(.system(size: 12, weight: .bold))
@@ -60,7 +62,7 @@ struct ContentView: View {
                     
                     // BPM (枠をさらにタイトに)
                     settingItem(target: .bpm, label: "\(viewModel.bpm)", size: 50, hPadding: 3)
-                        .digitalCrownRotation($viewModel.displayBpm, from: 40, through: 400, by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
+                        .digitalCrownRotation(binding(\.displayBpm), from: 40, through: 400, by: 1, sensitivity: .high, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
                 // BPMラベル
                 Text("BPM")
@@ -76,14 +78,14 @@ struct ContentView: View {
             // 中央：拍子設定
             HStack(spacing: 4) {
                 settingItem(target: .numerator, label: "\(viewModel.numerator)", size: 28, hPadding: 8)
-                    .digitalCrownRotation($viewModel.displayNumerator, from: 0, through: 32, by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
+                    .digitalCrownRotation(binding(\.displayNumerator), from: 0, through: 32, by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                 
                 Text("/")
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(.secondary.opacity(0.5))
                 
                 settingItem(target: .denominator, label: "\(viewModel.denominator)", size: 28, hPadding: 8)
-                    .digitalCrownRotation($viewModel.displayDenominatorIndex, from: 0, through: Double(viewModel.denominatorOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
+                    .digitalCrownRotation(binding(\.displayDenominatorIndex), from: 0, through: Double(viewModel.denominatorOptions.count - 1), by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
             }
             
             Spacer()
@@ -133,6 +135,13 @@ struct ContentView: View {
         case .strongMedium: return "speaker.wave.1.fill"
         case .strongOnly:   return "speaker.fill"
         }
+    }
+
+    private func binding<Value>(_ keyPath: ReferenceWritableKeyPath<MetronomeViewModel, Value>) -> Binding<Value> {
+        Binding(
+            get: { viewModel[keyPath: keyPath] },
+            set: { viewModel[keyPath: keyPath] = $0 }
+        )
     }
     
     // 全ての項目で統一された選択UIコンポーネント

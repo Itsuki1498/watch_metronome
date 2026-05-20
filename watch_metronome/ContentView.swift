@@ -9,95 +9,43 @@ import SwiftUI
 
 @available(iOS 16.7, *)
 struct ContentView: View {
-    @State private var viewModel = MetronomeViewModel()
+    @StateObject private var viewModel = MetronomeViewModel()
     @FocusState private var focusedField: MetronomeViewModel.EditTarget?
     @State private var isAdvancedMode: Bool = false
+    
+    // UIアニメーション用のステート
+    @State private var tapAnimate: Bool = false
+    @State private var dragAngle: Double = 0
     
     var body: some View {
         NavigationStack {
             ZStack {
                 Color.black.ignoresSafeArea()
                 
-                // 背景: Canvas UI (大画面向けにスケーリング)
+                // 1. 背景：Canvas UI (大画面向け)
                 TimelineView(.animation(minimumInterval: 0.016)) { context in
                     ModernPieIndicatorView(
                         viewModel: viewModel,
                         date: context.date
                     )
-                    .scaleEffect(1.5) // iPhoneの大画面に合わせて拡大
+                    .padding(30)
+                    .opacity(0.8)
                 }
                 
-                VStack {
+                VStack(spacing: 30) {
                     Spacer()
                     
-                    // BPM & Note Value
-                    VStack(spacing: 0) {
-                        HStack(alignment: .lastTextBaseline, spacing: 10) {
-                            noteValueDisplay(focused: focusedField == .noteValue)
-                                .onTapGesture { focusedField = .noteValue }
-                            
-                            Text("=")
-                                .font(.system(size: 24, weight: .bold))
-                                .foregroundColor(.secondary)
-                            
-                            settingItem(target: .bpm, label: "\(viewModel.bpm)", size: 80, hPadding: 10)
-                        }
-                        
-                        Text("BPM")
-                            .font(.system(size: 18, weight: .bold))
-                            .kerning(2)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.bottom, 40)
+                    // 2. メインBPM表示 & ダイヤル
+                    bpmDialSection
                     
-                    // Meter
-                    HStack(spacing: 20) {
-                        settingItem(target: .numerator, label: "\(viewModel.numerator)", size: 40, hPadding: 15)
-                        Text("/")
-                            .font(.system(size: 30, weight: .bold))
-                            .foregroundColor(.secondary)
-                        settingItem(target: .denominator, label: "\(viewModel.denominator)", size: 40, hPadding: 15)
-                    }
+                    // 3. 拍子表示
+                    meterSection
                     
                     Spacer()
                     
-                    // Controls
-                    HStack(spacing: 30) {
-                        // Rhythm Mode
-                        Button {
-                            viewModel.nextRhythmMode()
-                        } label: {
-                            Image(systemName: modeIcon(viewModel.rhythmMode))
-                                .font(.system(size: 30))
-                                .frame(width: 80, height: 60)
-                                .background(Color.blue.opacity(0.15))
-                                .clipShape(Capsule())
-                        }
-                        
-                        // Play/Stop
-                        Button {
-                            viewModel.togglePlayback()
-                        } label: {
-                            Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
-                                .font(.system(size: 40))
-                                .frame(width: 100, height: 80)
-                                .background(viewModel.isPlaying ? Color.red.opacity(0.2) : Color.green.opacity(0.2))
-                                .clipShape(Capsule())
-                                .foregroundColor(viewModel.isPlaying ? .red : .green)
-                        }
-                        
-                        // Advanced Settings
-                        Button {
-                            isAdvancedMode.toggle()
-                        } label: {
-                            Image(systemName: "slider.horizontal.3")
-                                .font(.system(size: 30))
-                                .frame(width: 80, height: 60)
-                                .background(Color.gray.opacity(0.15))
-                                .clipShape(Capsule())
-                        }
-                    }
-                    .padding(.bottom, 50)
+                    // 4. メインコントロール
+                    transportSection
+                        .padding(.bottom, 40)
                 }
             }
             .navigationTitle("Metronome Pro")
@@ -105,13 +53,160 @@ struct ContentView: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Advanced") {
+                    Button {
                         isAdvancedMode.toggle()
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .foregroundColor(.cyan)
                     }
                 }
             }
             .sheet(isPresented: $isAdvancedMode) {
                 AdvancedSettingsView(viewModel: viewModel)
+            }
+        }
+    }
+    
+    // BPMダイヤルセクション
+    private var bpmDialSection: some View {
+        VStack(spacing: -10) {
+            ZStack {
+                // タップエリア
+                Circle()
+                    .fill(Color.cyan.opacity(tapAnimate ? 0.1 : 0.02))
+                    .frame(width: 260, height: 260)
+                    .scaleEffect(tapAnimate ? 1.05 : 1.0)
+                    .onTapGesture {
+                        viewModel.tapTempo()
+                        withAnimation(.easeOut(duration: 0.1)) {
+                            tapAnimate = true
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            tapAnimate = false
+                        }
+                    }
+                
+                // ドラッグ・ダイヤル（外周）
+                Circle()
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 4)
+                    .frame(width: 240, height: 240)
+                
+                // 現在のBPM
+                VStack(spacing: 0) {
+                    Text("\(viewModel.bpm)")
+                        .font(.system(size: 90, weight: .black, design: .default).monospacedDigit())
+                        .foregroundColor(.white)
+                    Text("BPM")
+                        .font(.system(size: 18, weight: .bold))
+                        .kerning(4)
+                        .foregroundColor(.secondary)
+                }
+                
+                // インジケーター（ドラッグ位置）
+                Circle()
+                    .fill(Color.cyan)
+                    .frame(width: 12, height: 12)
+                    .offset(y: -120)
+                    .rotationEffect(.degrees(dragAngle))
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                updateBpmFromDrag(value: value)
+                            }
+                    )
+            }
+            
+            Text("TAP")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(.cyan.opacity(0.6))
+                .padding(.top, 20)
+        }
+    }
+    
+    // 拍子セクション
+    private var meterSection: some View {
+        HStack(spacing: 20) {
+            // 音価
+            Image(viewModel.currentNote.imageName)
+                .resizable()
+                .renderingMode(.template)
+                .aspectRatio(contentMode: .fit)
+                .frame(height: 34)
+                .padding(12)
+                .background(Color.white.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .foregroundColor(.white)
+            
+            Text("/")
+                .font(.system(size: 30, weight: .light))
+                .foregroundColor(.secondary)
+            
+            // 拍子
+            HStack(spacing: 4) {
+                Text("\(viewModel.numerator)")
+                    .font(.system(size: 40, weight: .bold).monospacedDigit())
+                Text("/")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.secondary)
+                Text("\(viewModel.denominator)")
+                    .font(.system(size: 40, weight: .bold).monospacedDigit())
+            }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.05))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .foregroundColor(.white)
+        }
+    }
+    
+    // トランスポート（再生・停止・モード）
+    private var transportSection: some View {
+        HStack(spacing: 40) {
+            // リズムモード
+            Button {
+                viewModel.nextRhythmMode()
+            } label: {
+                VStack(spacing: 5) {
+                    Image(systemName: modeIcon(viewModel.rhythmMode))
+                        .font(.system(size: 24))
+                    Text(modeName(viewModel.rhythmMode))
+                        .font(.system(size: 10, weight: .bold))
+                }
+                .frame(width: 70, height: 70)
+                .background(Color.blue.opacity(0.15))
+                .foregroundColor(.blue)
+                .clipShape(Circle())
+            }
+            
+            // 再生 / 停止
+            Button {
+                viewModel.togglePlayback()
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(viewModel.isPlaying ? Color.red.opacity(0.2) : Color.green.opacity(0.2))
+                        .frame(width: 100, height: 100)
+                    
+                    Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
+                        .font(.system(size: 40))
+                        .foregroundColor(viewModel.isPlaying ? .red : .green)
+                }
+            }
+            
+            // プリセット（将来用）
+            Button {
+                // TODO: Preset
+            } label: {
+                VStack(spacing: 5) {
+                    Image(systemName: "list.bullet.rectangle")
+                        .font(.system(size: 24))
+                    Text("PRESET")
+                        .font(.system(size: 10, weight: .bold))
+                }
+                .frame(width: 70, height: 70)
+                .background(Color.gray.opacity(0.1))
+                .foregroundColor(.secondary)
+                .clipShape(Circle())
             }
         }
     }
@@ -124,65 +219,111 @@ struct ContentView: View {
         }
     }
     
-    private func settingItem(target: MetronomeViewModel.EditTarget, label: String, size: CGFloat, hPadding: CGFloat) -> some View {
-        Text(label)
-            .font(.system(size: size, weight: .bold, design: .default).monospacedDigit())
-            .foregroundColor(focusedField == target ? .white : .primary.opacity(0.8))
-            .padding(.horizontal, hPadding)
-            .padding(.vertical, 5)
-            .background(
-                ZStack {
-                    if focusedField == target {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Color.blue.opacity(0.2))
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(Color.cyan, lineWidth: 2)
-                    }
-                }
-            )
-            .onTapGesture {
-                focusedField = target
-            }
+    private func modeName(_ mode: RhythmMode) -> String {
+        switch mode {
+        case .all:          return "FULL"
+        case .strongMedium: return "BEAT"
+        case .strongOnly:   return "BAR"
+        }
     }
     
-    private func noteValueDisplay(focused: Bool) -> some View {
-        Image(viewModel.currentNote.imageName)
-            .resizable()
-            .renderingMode(.template)
-            .aspectRatio(contentMode: .fit)
-            .frame(height: 40)
-            .padding(8)
-            .background(
-                ZStack {
-                    if focused {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Color.blue.opacity(0.2))
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(Color.cyan, lineWidth: 2)
-                    }
-                }
-            )
+    // ダイヤル操作ロジック
+    private func updateBpmFromDrag(value: DragGesture.Value) {
+        let vector = CGVector(dx: value.location.x, dy: value.location.y)
+        let angle = atan2(vector.dx, -vector.dy) * 180 / .pi
+        let normalizedAngle = angle < 0 ? angle + 360 : angle
+        
+        let diff = normalizedAngle - dragAngle
+        // 急激な反転を防止
+        if abs(diff) < 180 {
+            let bpmChange = Int(diff / 5) // 感度調整
+            if bpmChange != 0 {
+                viewModel.bpm += bpmChange
+                dragAngle = normalizedAngle
+            }
+        } else {
+            dragAngle = normalizedAngle
+        }
     }
 }
 
 @available(iOS 16.7, *)
 struct AdvancedSettingsView: View {
-    @Bindable var viewModel: MetronomeViewModel
+    @ObservedObject var viewModel: MetronomeViewModel
     @Environment(\.dismiss) var dismiss
     
     var body: some View {
         NavigationStack {
             List {
-                Section("Complex Meter (複合拍子)") {
-                    Text("複合拍子の高度な設定（3+2, 2+2+3 等）は将来のアップデートで完全に統合されます。現在は分子/分母の変更のみサポートしています。")
+                Section("Beat Patterns (複合拍子)") {
+                    Text("アクセントのグループ化を設定できます。")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                    
+                    HStack {
+                        ForEach(0..<viewModel.beatPattern.count, id: \.self) { index in
+                            Stepper("\(viewModel.beatPattern[index])", value: Binding(
+                                get: { viewModel.beatPattern[index] },
+                                set: { newValue in
+                                    var newPattern = viewModel.beatPattern
+                                    newPattern[index] = max(1, newValue)
+                                    viewModel.beatPattern = newPattern
+                                }
+                            ))
+                            .labelsHidden()
+                        }
+                        
+                        Button {
+                            var newPattern = viewModel.beatPattern
+                            newPattern.append(1)
+                            viewModel.beatPattern = newPattern
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundColor(.green)
+                        }
+                        
+                        if viewModel.beatPattern.count > 1 {
+                            Button {
+                                var newPattern = viewModel.beatPattern
+                                newPattern.removeLast()
+                                viewModel.beatPattern = newPattern
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundColor(.red)
+                            }
+                        }
+                    }
                 }
                 
-                Section("Tempo Automation (BPM変化)") {
-                    Text("セットリスト機能により、指定した小節数ごとにBPMを自動変化させるプログラミングが可能です。")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                Section("Denominator (分母)") {
+                    Picker("Denominator", selection: $viewModel.displayDenominatorIndex) {
+                        ForEach(0..<viewModel.denominatorOptions.count, id: \.self) { i in
+                            Text("\(viewModel.denominatorOptions[i])").tag(Double(i))
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+                
+                Section("Note Value (基準音価)") {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 15) {
+                            ForEach(0..<viewModel.validNoteValueOptions.count, id: \.self) { i in
+                                let note = viewModel.validNoteValueOptions[i]
+                                Button {
+                                    viewModel.displayNoteValueIndex = Double(i)
+                                } label: {
+                                    Image(note.imageName)
+                                        .resizable()
+                                        .renderingMode(.template)
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(height: 30)
+                                        .padding(10)
+                                        .background(viewModel.currentNote.multiplier == note.multiplier ? Color.cyan.opacity(0.3) : Color.white.opacity(0.1))
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                            }
+                        }
+                        .padding(.vertical, 5)
+                    }
                 }
             }
             .navigationTitle("Advanced Settings")
@@ -206,7 +347,7 @@ struct ModernPieIndicatorView: View {
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
             let radius = min(size.width, size.height) / 2
             let outerRadius = radius - 10
-            let innerRadius = outerRadius - 20
+            let innerRadius = outerRadius - 25
             
             let isPlaying = viewModel.isPlaying
             let rawProgress = isPlaying ? currentMeasureProgress() : 0.0
@@ -214,7 +355,7 @@ struct ModernPieIndicatorView: View {
             let safeProgress = needleProgress > 0.999 ? 0.0 : needleProgress
             let currentAngle = (safeProgress * 360.0) - 90.0
             
-            context.stroke(Circle().path(in: CGRect(x: center.x - outerRadius, y: center.y - outerRadius, width: outerRadius * 2, height: outerRadius * 2)), with: .color(.white.opacity(0.1)), lineWidth: 2)
+            context.stroke(Circle().path(in: CGRect(x: center.x - outerRadius, y: center.y - outerRadius, width: outerRadius * 2, height: outerRadius * 2)), with: .color(.white.opacity(0.05)), lineWidth: 2)
             
             if viewModel.numerator > 0 {
                 let outerCount = Double(max(1, viewModel.numerator))
@@ -222,14 +363,14 @@ struct ModernPieIndicatorView: View {
                 for i in 0..<Int(outerCount) {
                     let rangeStart = Double(i) * outerStep
                     let rangeEnd = Double(i + 1) * outerStep
-                    drawArc(context: context, center: center, radius: outerRadius, start: rangeStart * 360 - 89, end: rangeEnd * 360 - 91, color: .white.opacity(0.1), width: 4)
+                    drawArc(context: context, center: center, radius: outerRadius, start: rangeStart * 360 - 89, end: rangeEnd * 360 - 91, color: .white.opacity(0.08), width: 6)
                     
                     if isPlaying && safeProgress >= rangeStart && safeProgress < rangeEnd {
                         let color = (i == 0) ? Color.orange : Color.cyan
                         let segStart = max(rangeStart * 360 - 90, currentAngle)
                         let segEnd = rangeEnd * 360 - 91
                         if segStart < segEnd {
-                            drawArc(context: context, center: center, radius: outerRadius, start: segStart, end: segEnd, color: color, width: 12)
+                            drawArc(context: context, center: center, radius: outerRadius, start: segStart, end: segEnd, color: color, width: 14)
                         }
                     }
                 }
@@ -241,13 +382,13 @@ struct ModernPieIndicatorView: View {
                 for i in 0..<mediumBeatCount {
                     let start = (Double(i) * ticksPerRef) / totalTicks
                     let end = min(totalTicks, (Double(i + 1) * ticksPerRef)) / totalTicks
-                    drawArc(context: context, center: center, radius: innerRadius, start: start * 360 - 88, end: end * 360 - 92, color: .blue.opacity(0.15), width: 3)
+                    drawArc(context: context, center: center, radius: innerRadius, start: start * 360 - 88, end: end * 360 - 92, color: .blue.opacity(0.1), width: 4)
                     
                     if isPlaying && safeProgress >= start && safeProgress < end {
                         let segStart = max(start * 360 - 90, currentAngle)
                         let segEnd = end * 360 - 92
                         if segStart < segEnd {
-                            drawArc(context: context, center: center, radius: innerRadius, start: segStart, end: segEnd, color: .white.opacity(0.8), width: 8)
+                            drawArc(context: context, center: center, radius: innerRadius, start: segStart, end: segEnd, color: .white.opacity(0.7), width: 10)
                         }
                     }
                 }
@@ -258,8 +399,8 @@ struct ModernPieIndicatorView: View {
                 path.move(to: center)
                 let endPoint = CGPoint(x: center.x + outerRadius * cos(currentAngle * .pi / 180), y: center.y + outerRadius * sin(currentAngle * .pi / 180))
                 path.addLine(to: endPoint)
-                context.stroke(path, with: .color(.white), lineWidth: 2)
-                context.fill(Circle().path(in: CGRect(x: endPoint.x - 4, y: endPoint.y - 4, width: 8, height: 8)), with: .color(.white))
+                context.stroke(path, with: .color(.white.opacity(0.9)), lineWidth: 3)
+                context.fill(Circle().path(in: CGRect(x: endPoint.x - 5, y: endPoint.y - 5, width: 10, height: 10)), with: .color(.white))
             }
         }
     }
