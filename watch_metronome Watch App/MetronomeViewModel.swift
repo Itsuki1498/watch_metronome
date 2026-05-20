@@ -18,7 +18,7 @@ struct NoteValue: Hashable {
 }
 
 /// メトロノームの画面状態と操作を管理するViewModel
-@available(watchOS 10.0, *)
+@available(watchOS 10.6, *)
 @Observable
 final class MetronomeViewModel {
     

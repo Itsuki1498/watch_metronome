@@ -8,7 +8,7 @@
 import SwiftUI
 import WatchKit
 
-@available(watchOS 10.0, *)
+@available(watchOS 10.6, *)
 struct ContentView: View {
     @State private var viewModel = MetronomeViewModel()
     @FocusState private var focusedField: MetronomeViewModel.EditTarget?
@@ -191,7 +191,7 @@ struct CapsuleHalf: Shape {
     }
 }
 
-@available(watchOS 10.0, *)
+@available(watchOS 10.6, *)
 struct ModernPieIndicatorView: View {
     let viewModel: MetronomeViewModel
     let date: Date
@@ -299,7 +299,7 @@ struct ModernPieIndicatorView: View {
 }
 
 #Preview {
-    if #available(watchOS 10.0, *) {
+    if #available(watchOS 10.6, *) {
         ContentView()
     } else {
         Text("Unsupported")

@@ -25,7 +25,7 @@ enum RhythmMode: Int, CaseIterable {
 }
 
 /// メトロノームのリズム生成を担う engine
-@available(watchOS 10.0, *)
+@available(watchOS 10.6, *)
 @Observable
 final class MetronomeEngine {
     
