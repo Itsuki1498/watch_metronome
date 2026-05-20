@@ -18,7 +18,7 @@ struct NoteValue: Hashable {
 }
 
 /// メトロノームの画面状態と操作を管理するViewModel
-@available(watchOS 10.6, *)
+@available(watchOS 10.6, iOS 16.7, *)
 @Observable
 final class MetronomeViewModel {
     
@@ -41,14 +41,22 @@ final class MetronomeViewModel {
     
     var bpm: Int {
         get { engine.bpm }
-        set { engine.bpm = newValue }
+        set { 
+            if engine.bpm != newValue {
+                engine.bpm = newValue
+                syncToRemote()
+            }
+        }
     }
 
     var displayBpm: Double {
         get { Double(engine.bpm) }
         set { 
             let newIntValue = Int(newValue)
-            if newIntValue != engine.bpm { engine.bpm = newIntValue }
+            if newIntValue != engine.bpm {
+                engine.bpm = newIntValue
+                syncToRemote()
+            }
         }
     }
     
@@ -56,8 +64,11 @@ final class MetronomeViewModel {
         get { Double(engine.numerator) }
         set { 
             let newIntValue = Int(newValue)
-            if newIntValue != engine.numerator { engine.numerator = newIntValue }
-            refreshValidNoteValues()
+            if newIntValue != engine.numerator {
+                engine.numerator = newIntValue
+                refreshValidNoteValues()
+                syncToRemote()
+            }
         }
     }
     
@@ -71,6 +82,7 @@ final class MetronomeViewModel {
                     engine.denominator = newDenom
                     refreshValidNoteValues()
                     syncNoteValueToDenominator()
+                    syncToRemote()
                 }
             }
         }
@@ -135,6 +147,7 @@ final class MetronomeViewModel {
     init() {
         refreshValidNoteValues()
         setupEngine()
+        setupConnectivity()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
             self.isSystemReady = true
         }
@@ -175,6 +188,30 @@ final class MetronomeViewModel {
         if let index = noteValueOptions.firstIndex(where: { abs($0.multiplier - unitDenom) < 0.001 }) {
             noteValueIndex = index
         }
+    }
+    
+    // MARK: - Connectivity
+    
+    private func setupConnectivity() {
+        // ConnectivityManagerからの変更を受け取る
+        _ = withObservationTracking {
+            ConnectivityManager.shared.remoteBpm
+        } onChange: { [weak self] in
+            if let bpm = ConnectivityManager.shared.remoteBpm {
+                DispatchQueue.main.async {
+                    self?.engine.bpm = bpm
+                }
+            }
+            self?.setupConnectivity() // 追跡を継続
+        }
+    }
+    
+    private func syncToRemote() {
+        ConnectivityManager.shared.sendStatus(
+            bpm: engine.bpm,
+            numerator: engine.numerator,
+            denominator: engine.denominator
+        )
     }
     
     // MARK: - Actions

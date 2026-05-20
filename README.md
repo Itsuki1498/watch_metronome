@@ -1,53 +1,31 @@
-# Watch Metronome Professional
+# Watch Metronome Professional (Multi-Platform)
 
-**High-Precision Timing Engine & Modern Canvas Interface for watchOS**
+**High-Precision Timing Engine & Modern Canvas Interface for iOS & watchOS**
 
-[![Platform](https://img.shields.io/badge/platform-watchOS%2010.0%2B-black.svg)](https://developer.apple.com/watchos/)
+[![Platform](https://img.shields.io/badge/platform-watchOS%2010.6%2B%20%7C%20iOS%2016.7%2B-black.svg)](https://developer.apple.com/apple-watch/)
 [![Swift](https://img.shields.io/badge/Swift-5.10%2B-orange.svg)](https://swift.org)
 
 ## 概要
 
-`Watch Metronome Professional` は、Apple Watch の限界に挑戦した高精度メトロノーム・アプリケーションです。プロの演奏家が要求する「絶対的なタイミング精度」と、最新の SwiftUI 技術を駆使した「直感的なビジュアル・フィードバック」を watchOS 上で実現しました。
-
-単なるリズム再生ツールを超え、触覚・視覚・聴覚の全てを統合した「ウェアラブル・精密インストゥルメント」として設計されています。
+`Watch Metronome Professional` は、Apple Watch と iPhone の両方で動作する、プロフェッショナル向けの高精度メトロノーム・ソリューションです。watchOS 版で培われた「絶対的なタイミング精度」を iPhone の大画面へも展開し、さらに高度な練習を可能にするコンパニオン機能を提供します。
 
 ## 主な特長
 
-### 1. 超高精度シンクロ・エンジン
-- **Drift-Corrected Timing**: `DispatchSourceTimer` をベースに、システム uptime を基準とした相対スケジューリングを実装。メインスレッドの負荷や Digital Crown の操作に影響されない、ナノ秒単位の正確性を維持します。
-- **Zero-Latency Start**: 最初の拍動の 100ms 未来を予約実行することで、オーディオデバイスと Taptic Engine の準備時間を確保し、起動直後の「モタつき」を完全に排除しました。
+### 1. ハイブリッド・プラットフォーム構成
+- **Standalone Mode**: iPhone と Apple Watch のどちらでも、単体で全ての基本機能を利用可能。
+- **Real-time Sync**: `WatchConnectivity` により、iPhone 側での設定変更（BPM, 拍子）を即座に Apple Watch へ同期。
 
-### 2. インテリジェント・リズム・ロジック
-- **Triple-Pulse Hierarchy**: 小節頭（Strong）、基準音符（Medium）、最小パルス（Weak）の 3 階層でリズムを解釈。
-- **Density Control (3 Modes)**:
-    - **All**: 全てのパルスを表示・出力（高度な裏拍の確認に）。
-    - **Strong/Medium**: 主要な拍のみ（リズムの骨格把握に）。
-    - **Strong Only**: 小節頭のみ（内部時計の自立トレーニングに）。
-- **Musical Note Filtering**: 指定した拍子（Numerator/Denominator）に基づき、選択可能な音価（基準音符）を動的にフィルタリング。音楽的な整合性をシステムが保証します。
+### 2. iOS版 専用機能 (Advanced Features)
+- **大画面 Canvas レンダリング**: iPhone の高精細なディスプレイに最適化された、スケーラブルなリズムリング。
+- **高度なプリセット管理**: 複雑な変拍子や BPM 変化をプログラムし、セットリストとして管理（※開発中）。
 
-### 3. 次世代 Canvas UI
-- **60fps Vector Rendering**: SwiftUI の `Canvas` API を使用し、滑らかな針の動きを実現。
-- **Modern Pie Indicator**: 外側（分母単位）と内側（基準音符単位）の二重円環インジケーターにより、複雑な変拍子も視覚的に一瞬で把握可能です。
-- **Anti-Flash Guard**: 0.999 境界値ガードにより、浮動小数点演算特有の「12時位置の描画飛び」を抑制しています。
-
-### 4. 高度な触覚フィードバック
-- **Taptic Hierarchy**: 強・中・弱の各拍に、それぞれ異なる Taptic Engine パターン（`.directionUp`, `.directionDown`, `.click`）を割り当て。画面を見ずとも、振動の「質感」だけで正確な位置を把握できます。
-
-## 技術仕様
-
-| カテゴリ | 採用技術 |
-| :--- | :--- |
-| 言語 | Swift 5.10+ |
-| フレームワーク | SwiftUI, Observation, WatchKit |
-| 状態管理 | `@Observable` によるリアクティブ・アーキテクチャ |
-| レンダリング | Canvas API (Low-level rendering) |
-| タイミング | GCD DispatchSourceTimer with relative deadline |
-| アセット | 960px High-Definition PNG (Template Rendering) |
+### 3. 超高精度シンクロ・エンジン (Shared Logic)
+- **Drift-Corrected GCD Timer**: 両プラットフォームで共通のコアエンジンを使用し、ナノ秒単位の精度を保証。
 
 ## システム要件
 
-- **Device**: Apple Watch Series 4 以降 (SE 第1世代以降を含む)
-- **OS**: watchOS 10.0 以上
+- **Apple Watch**: watchOS 10.6 以上
+- **iPhone**: iOS 16.7 以上 (iPhone 8, X 以降をフルサポート)
 - **IDE**: Xcode 15.4 / 16.0 以降
 
 ## セットアップとビルド
