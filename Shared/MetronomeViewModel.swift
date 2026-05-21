@@ -20,19 +20,26 @@ struct NoteValue: Hashable {
 /// メトロノームの画面状態と操作を管理するViewModel
 @available(watchOS 10.6, iOS 16.7, *)
 final class MetronomeViewModel: ObservableObject {
-    
+
     // MARK: - Properties
-    
+
     private let engine = MetronomeEngine()
     private let hapticManager = HapticManager()
+    private let clickSoundManager = ClickSoundManager()
     private var cancellables = Set<AnyCancellable>()
-    
+
     @Published var isSystemReady: Bool = false
-    
+    @Published var program: MetronomeProgram = .defaultProgram
+    @Published var queuedChange: QueuedMetronomeChange?
+    @Published var currentSectionIndex: Int = 0
+    @Published var currentBarIndex: Int = 0
+    @Published var presetProfiles: [PresetProfile] = []
+    private let presetStorageKey = "metronomePresetProfiles.v1"
+
     enum EditTarget: Hashable {
         case bpm, numerator, denominator, noteValue, beatPattern
     }
-    
+
     /// リズムモード (全て / 強・中 / 強のみ)
     var rhythmMode: RhythmMode {
         get { engine.rhythmMode }
@@ -41,14 +48,15 @@ final class MetronomeViewModel: ObservableObject {
             engine.rhythmMode = newValue
         }
     }
-    
+
     var bpm: Int {
         get { engine.bpm }
-        set { 
+        set {
             let clamped = min(400, max(40, newValue))
             if engine.bpm != clamped {
                 objectWillChange.send()
                 engine.bpm = clamped
+                updateFirstProgramSectionFromEngine()
                 syncToRemote()
             }
         }
@@ -56,30 +64,32 @@ final class MetronomeViewModel: ObservableObject {
 
     var displayBpm: Double {
         get { Double(engine.bpm) }
-        set { 
+        set {
             let newIntValue = Int(newValue)
             if newIntValue != engine.bpm {
                 engine.bpm = newIntValue
+                updateFirstProgramSectionFromEngine()
                 syncToRemote()
             }
         }
     }
-    
+
     var displayNumerator: Double {
         get { Double(engine.numerator) }
-        set { 
+        set {
             let newIntValue = Int(newValue)
             if newIntValue != engine.numerator {
                 engine.numerator = newIntValue
                 refreshValidNoteValues()
+                updateFirstProgramSectionFromEngine()
                 syncToRemote()
             }
         }
     }
-    
+
     var displayDenominatorIndex: Double {
         get { Double(denominatorOptions.firstIndex(of: engine.denominator) ?? 1) }
-        set { 
+        set {
             let index = Int(newValue)
             if index >= 0 && index < denominatorOptions.count {
                 let newDenom = denominatorOptions[index]
@@ -88,61 +98,72 @@ final class MetronomeViewModel: ObservableObject {
                     engine.denominator = newDenom
                     refreshValidNoteValues()
                     syncNoteValueToDenominator()
+                    updateFirstProgramSectionFromEngine()
                     syncToRemote()
                 }
             }
         }
     }
-    
+
     var displayNoteValueIndex: Double {
-        get { 
+        get {
             let current = noteValueOptions[noteValueIndex]
             return Double(validNoteValueOptions.firstIndex(where: { $0.multiplier == current.multiplier }) ?? 0)
         }
-        set { 
+        set {
             let index = Int(newValue)
             if index >= 0 && index < validNoteValueOptions.count {
                 let selectedNote = validNoteValueOptions[index]
                 if let masterIndex = noteValueOptions.firstIndex(where: { $0.multiplier == selectedNote.multiplier }) {
                     noteValueIndex = masterIndex
+                    updateFirstProgramSectionFromEngine()
                 }
             }
         }
     }
-    
+
     @Published var noteValueIndex: Int = 4 {
         didSet {
             engine.referenceNoteMultiplier = noteValueOptions[noteValueIndex].multiplier
         }
     }
-    
+
     var isPlaying: Bool { engine.isPlaying }
-    
+
     /// 複合拍子のパターン
     var beatPattern: [Int] {
         get { engine.beatPattern }
         set {
             objectWillChange.send()
             engine.beatPattern = newValue
-            // syncToRemote() // パターンの同期は将来的に実装
+            updateFirstProgramSectionFromEngine()
         }
     }
-    
+
+    var accents: [Bool]? {
+        get { engine.accents }
+        set {
+            objectWillChange.send()
+            engine.accents = newValue
+            updateFirstProgramSectionFromEngine()
+        }
+    }
+
     var numerator: Int { beatPattern.reduce(0, +) }
     var denominator: Int { engine.denominator }
-    
+
     /// --- 同期された状態プロパティ ---
     @Published var currentBeat: Double = 1.0
     @Published var currentIntensity: BeatIntensity = .weak
     @Published var lastTickTime: DispatchTime = .now()
-    
+
     var totalTicksInMeasure: Int { engine.totalTicksInMeasure }
     var ticksPerOuterBeat: Int { engine.ticksPerOuterBeat }
     var ticksPerRefNote: Int { engine.ticksPerRefNote }
     var tickInterval: Double { engine.internalInterval }
-    
+
     let denominatorOptions = [2, 4, 8, 16, 32]
-    
+
     let noteValueOptions: [NoteValue] = [
         NoteValue(name: "全", multiplier: 4.0, imageName: "note_whole", isDotted: false, displayHeight: 10),
         NoteValue(name: "付2", multiplier: 3.0, imageName: "note_half_dotted", isDotted: true, displayHeight: 24),
@@ -155,24 +176,24 @@ final class MetronomeViewModel: ObservableObject {
         NoteValue(name: "16", multiplier: 0.25, imageName: "note_sixteenth", isDotted: false, displayHeight: 24),
         NoteValue(name: "32", multiplier: 0.125, imageName: "note_32nd", isDotted: false, displayHeight: 24)
     ]
-    
+
     @Published var validNoteValueOptions: [NoteValue] = []
-    
+
     var currentNote: NoteValue {
         noteValueOptions[noteValueIndex]
     }
-    
+
     // MARK: - Tap Tempo Logic
-    
+
     private var tapTimes: [Date] = []
-    
+
     func tapTempo() {
         let now = Date()
         tapTimes.append(now)
-        
+
         // 過去2秒以上前のタップは削除
         tapTimes = tapTimes.filter { now.timeIntervalSince($0) < 2.0 }
-        
+
         if tapTimes.count >= 2 {
             var intervals: [TimeInterval] = []
             for i in 1..<tapTimes.count {
@@ -182,38 +203,63 @@ final class MetronomeViewModel: ObservableObject {
             let calculatedBpm = Int(round(60.0 / averageInterval))
             self.bpm = calculatedBpm
         }
-        
+
         hapticManager.playWeak() // タップ時の手応え
     }
-    
+
     // MARK: - Initialization
-    
+
     init() {
         refreshValidNoteValues()
+        loadPresetProfiles()
+        engine.applyProgram(program)
         setupEngine()
         setupConnectivity()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
             self.isSystemReady = true
         }
     }
-    
+
     private func setupEngine() {
-        engine.onTick = { [weak self] (beat: Double, intensity: BeatIntensity, tickTime: DispatchTime) in
-            switch intensity {
-            case .strong: self?.hapticManager.playStrong()
-            case .medium: self?.hapticManager.playMedium()
-            case .weak:   self?.hapticManager.playWeak()
-            case .silence: break
-            }
-            
+        engine.onMeasureStart = { [weak self] sectionIndex, barIndex, _ in
             DispatchQueue.main.async {
-                self?.currentBeat = beat
-                self?.currentIntensity = intensity
-                self?.lastTickTime = tickTime
+                self?.currentSectionIndex = sectionIndex
+                self?.currentBarIndex = barIndex
+            }
+        }
+        engine.onTick = { [weak self] (beat: Double, intensity: BeatIntensity, tickTime: DispatchTime) in
+            guard let self else { return }
+            switch intensity {
+            case .strong:
+                #if os(watchOS)
+                self.hapticManager.playStrong()
+                #else
+                self.clickSoundManager.play(.strong)
+                #endif
+            case .medium:
+                #if os(watchOS)
+                self.hapticManager.playMedium()
+                #else
+                self.clickSoundManager.play(.medium)
+                #endif
+            case .weak:
+                #if os(watchOS)
+                self.hapticManager.playWeak()
+                #else
+                self.clickSoundManager.play(.weak)
+                #endif
+            case .silence:
+                break
+            }
+
+            DispatchQueue.main.async {
+                self.currentBeat = beat
+                self.currentIntensity = intensity
+                self.lastTickTime = tickTime
             }
         }
     }
-    
+
     private func refreshValidNoteValues() {
         let unitDenom = 4.0 / Double(engine.denominator)
         validNoteValueOptions = noteValueOptions.filter { note in
@@ -226,14 +272,14 @@ final class MetronomeViewModel: ObservableObject {
             syncNoteValueToDenominator()
         }
     }
-    
+
     private func syncNoteValueToDenominator() {
         let unitDenom = 4.0 / Double(engine.denominator)
         if let index = noteValueOptions.firstIndex(where: { abs($0.multiplier - unitDenom) < 0.001 }) {
             noteValueIndex = index
         }
     }
-    
+
     // MARK: - Connectivity
     private func setupConnectivity() {
         // ConnectivityManagerからの変更を受け取る
@@ -275,8 +321,37 @@ final class MetronomeViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        ConnectivityManager.shared.$remoteProgram
+            .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] program in
+                self?.applyProgram(program, sync: false, resetPosition: true)
+            }
+            .store(in: &cancellables)
+
+        ConnectivityManager.shared.$remoteQueuedChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] change in
+                self?.queuedChange = change
+                self?.engine.queueChangeForNextMeasure(change)
+            }
+            .store(in: &cancellables)
+
+        ConnectivityManager.shared.$remoteTransportCommand
+            .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] command in
+                guard let self else { return }
+                if command == "play", !self.engine.isPlaying {
+                    self.togglePlayback(sync: false)
+                } else if command == "stop", self.engine.isPlaying {
+                    self.togglePlayback(sync: false)
+                }
+            }
+            .store(in: &cancellables)
     }
-    
+
     private func syncToRemote() {
         ConnectivityManager.shared.sendStatus(
             bpm: engine.bpm,
@@ -284,25 +359,187 @@ final class MetronomeViewModel: ObservableObject {
             denominator: engine.denominator
         )
     }
-    
+
     // MARK: - Actions
-    
+
     func nextRhythmMode() {
         let allModes = RhythmMode.allCases
         let currentIndex = rhythmMode.rawValue
         let nextIndex = (currentIndex + 1) % allModes.count
         rhythmMode = allModes[nextIndex]
+        updateFirstProgramSectionFromEngine()
     }
-    
-    func togglePlayback() {
+
+    func togglePlayback(sync: Bool = true) {
         objectWillChange.send()
         if engine.isPlaying {
             engine.stop()
+            if sync { ConnectivityManager.shared.sendTransportCommand("stop") }
         } else {
             engine.start()
             self.currentBeat = 1.0
             self.currentIntensity = .strong
             self.lastTickTime = engine.lastTickTime
+            if sync {
+                ConnectivityManager.shared.sendProgram(program)
+                ConnectivityManager.shared.sendQueuedChange(queuedChange)
+                ConnectivityManager.shared.sendTransportCommand("play")
+            }
         }
+    }
+
+    func applyProgram(_ newProgram: MetronomeProgram, sync: Bool = true, resetPosition: Bool = true) {
+        objectWillChange.send()
+        program = newProgram
+        currentSectionIndex = 0
+        currentBarIndex = 0
+        engine.applyProgram(newProgram, resetPosition: resetPosition)
+        if let first = newProgram.sections.first {
+            applySectionToEditableState(first)
+        }
+        if sync {
+            ConnectivityManager.shared.sendProgram(newProgram)
+        }
+    }
+
+    func updateSection(_ section: ProgramSection) {
+        guard let index = program.sections.firstIndex(where: { $0.id == section.id }) else { return }
+        var nextProgram = program
+        nextProgram.sections[index] = section
+        applyProgram(nextProgram)
+    }
+
+    func addSection(after sectionID: UUID? = nil) {
+        var nextProgram = program
+        let template = nextProgram.sections.last ?? ProgramSection(name: "Section")
+        let next = ProgramSection(
+            name: "Section \(nextProgram.sections.count + 1)",
+            meter: template.meter,
+            bpm: template.bpm,
+            bars: template.bars,
+            referenceNoteMultiplier: template.referenceNoteMultiplier,
+            rhythmMode: template.rhythmMode,
+            tempoAutomation: template.tempoAutomation
+        )
+        if let sectionID, let index = nextProgram.sections.firstIndex(where: { $0.id == sectionID }) {
+            nextProgram.sections.insert(next, at: index + 1)
+        } else {
+            nextProgram.sections.append(next)
+        }
+        applyProgram(nextProgram)
+    }
+
+    func removeSection(_ section: ProgramSection) {
+        guard program.sections.count > 1 else { return }
+        var nextProgram = program
+        nextProgram.sections.removeAll { $0.id == section.id }
+        applyProgram(nextProgram)
+    }
+
+    func queueChange(section: ProgramSection, loops: Bool = true) {
+        let change = QueuedMetronomeChange(section: section, loops: loops)
+        queuedChange = change
+        engine.queueChangeForNextMeasure(change)
+        ConnectivityManager.shared.sendQueuedChange(change)
+    }
+
+    func queueTempoAutomation(targetBpm: Int, bars: Int) {
+        let current = program.sections[safe: currentSectionIndex] ?? program.sections.first ?? ProgramSection()
+        let shape: TempoAutomationShape = targetBpm >= bpm ? .accelerando : .ritardando
+        let section = ProgramSection(
+            name: shape == .accelerando ? "accel." : "rit.",
+            meter: current.meter,
+            bpm: bpm,
+            bars: max(1, bars),
+            referenceNoteMultiplier: current.referenceNoteMultiplier,
+            rhythmMode: current.rhythmMode,
+            tempoAutomation: TempoAutomation(shape: shape, targetBpm: targetBpm, lengthInBars: max(1, bars)),
+            accents: current.accents
+        )
+        queueChange(section: section, loops: false)
+    }
+
+    func clearQueuedChange() {
+        queuedChange = nil
+        engine.queueChangeForNextMeasure(nil)
+        ConnectivityManager.shared.sendQueuedChange(nil)
+    }
+
+    private func applySectionToEditableState(_ section: ProgramSection) {
+        engine.beatPattern = section.meter.groups
+        engine.denominator = section.meter.denominator
+        engine.bpm = section.bpm
+        engine.referenceNoteMultiplier = section.referenceNoteMultiplier
+        engine.rhythmMode = section.rhythmMode
+        refreshValidNoteValues()
+    }
+
+    private func updateFirstProgramSectionFromEngine() {
+        guard !program.sections.isEmpty else { return }
+        var nextProgram = program
+        let section = ProgramSection(
+            id: nextProgram.sections[0].id,
+            name: nextProgram.sections[0].name,
+            meter: MeterPattern(id: nextProgram.sections[0].meter.id, groups: engine.beatPattern, denominator: engine.denominator),
+            bpm: engine.bpm,
+            bars: nextProgram.sections[0].bars,
+            referenceNoteMultiplier: engine.referenceNoteMultiplier,
+            rhythmMode: engine.rhythmMode,
+            tempoAutomation: nextProgram.sections[0].tempoAutomation,
+            accents: engine.accents
+        )
+        nextProgram.sections[0] = section
+        program = nextProgram
+        ConnectivityManager.shared.sendProgram(nextProgram)
+    }
+
+    func saveCurrentProgramAsPreset(name: String, kind: PresetProfileKind) {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let profile = PresetProfile(
+            name: trimmedName.isEmpty ? program.name : trimmedName,
+            kind: kind,
+            program: program
+        )
+        presetProfiles.append(profile)
+        persistPresetProfiles()
+    }
+
+    func deletePresetProfile(_ profile: PresetProfile) {
+        presetProfiles.removeAll { $0.id == profile.id }
+        persistPresetProfiles()
+    }
+
+    func applyPresetProfile(_ profile: PresetProfile) {
+        applyProgram(profile.program)
+    }
+
+    func queuePresetProfile(_ profile: PresetProfile) {
+        if let section = profile.program.sections.first {
+            queueChange(section: section, loops: profile.program.loops)
+        }
+    }
+
+    private func loadPresetProfiles() {
+        if let data = UserDefaults.standard.data(forKey: presetStorageKey),
+           let decoded = try? JSONDecoder().decode([PresetProfile].self, from: data) {
+            presetProfiles = decoded
+        } else {
+            presetProfiles = [
+                PresetProfile(name: "Basic 4/4", kind: .basic, program: .defaultProgram),
+                PresetProfile(name: "4/4 + 7/8", kind: .composite, program: .iPhoneStarterProgram)
+            ]
+        }
+    }
+
+    private func persistPresetProfiles() {
+        guard let data = try? JSONEncoder().encode(presetProfiles) else { return }
+        UserDefaults.standard.set(data, forKey: presetStorageKey)
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        guard indices.contains(index) else { return nil }
+        return self[index]
     }
 }

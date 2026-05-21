@@ -18,6 +18,9 @@ final class ConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
     @Published var remoteBpm: Int?
     @Published var remoteNumerator: Int?
     @Published var remoteDenominator: Int?
+    @Published var remoteProgram: MetronomeProgram?
+    @Published var remoteQueuedChange: QueuedMetronomeChange?
+    @Published var remoteTransportCommand: String?
     
     override init() {
         super.init()
@@ -35,6 +38,26 @@ final class ConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
             "denominator": denominator
         ]
         session.transferUserInfo(data)
+    }
+
+    func sendProgram(_ program: MetronomeProgram) {
+        guard session.activationState == .activated else { return }
+        guard let payload = try? JSONEncoder().encode(program) else { return }
+        session.transferUserInfo(["program": payload])
+    }
+
+    func sendQueuedChange(_ change: QueuedMetronomeChange?) {
+        guard session.activationState == .activated else { return }
+        if let change, let payload = try? JSONEncoder().encode(change) {
+            session.transferUserInfo(["queuedChange": payload])
+        } else {
+            session.transferUserInfo(["clearQueuedChange": true])
+        }
+    }
+
+    func sendTransportCommand(_ command: String) {
+        guard session.activationState == .activated else { return }
+        session.transferUserInfo(["transport": command])
     }
     
     // MARK: - WCSessionDelegate
@@ -55,6 +78,20 @@ final class ConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
             if let bpm = userInfo["bpm"] as? Int { self.remoteBpm = bpm }
             if let num = userInfo["numerator"] as? Int { self.remoteNumerator = num }
             if let den = userInfo["denominator"] as? Int { self.remoteDenominator = den }
+            if let data = userInfo["program"] as? Data,
+               let program = try? JSONDecoder().decode(MetronomeProgram.self, from: data) {
+                self.remoteProgram = program
+            }
+            if let data = userInfo["queuedChange"] as? Data,
+               let change = try? JSONDecoder().decode(QueuedMetronomeChange.self, from: data) {
+                self.remoteQueuedChange = change
+            }
+            if userInfo["clearQueuedChange"] as? Bool == true {
+                self.remoteQueuedChange = nil
+            }
+            if let command = userInfo["transport"] as? String {
+                self.remoteTransportCommand = command
+            }
         }
     }
 }
