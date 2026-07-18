@@ -222,11 +222,13 @@ final class MetronomeViewModel: ObservableObject {
     }
 
     private func setupEngine() {
-        engine.onMeasureStart = { [weak self] sectionIndex, barIndex, _ in
+        engine.onMeasureStart = { [weak self] sectionIndex, barIndex, section in
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.currentSectionIndex = sectionIndex
                 self.currentBarIndex = barIndex
+                self.refreshValidNoteValues()
+                self.syncNoteValue(to: section.referenceNoteMultiplier)
                 if self.queuedChange != nil && sectionIndex == 0 && barIndex == 0 {
                     self.queuedChange = nil
                 }
