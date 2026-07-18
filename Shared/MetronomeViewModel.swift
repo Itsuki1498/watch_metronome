@@ -56,7 +56,7 @@ final class MetronomeViewModel: ObservableObject {
             if engine.bpm != clamped {
                 objectWillChange.send()
                 engine.bpm = clamped
-                updateFirstProgramSectionFromEngine()
+                updateActiveProgramSectionFromEngine()
                 syncToRemote()
             }
         }
@@ -69,7 +69,7 @@ final class MetronomeViewModel: ObservableObject {
             if newIntValue != engine.bpm {
                 objectWillChange.send()
                 engine.bpm = newIntValue
-                updateFirstProgramSectionFromEngine()
+                updateActiveProgramSectionFromEngine()
                 syncToRemote()
             }
         }
@@ -83,7 +83,7 @@ final class MetronomeViewModel: ObservableObject {
                 objectWillChange.send()
                 engine.numerator = newIntValue
                 refreshValidNoteValues()
-                updateFirstProgramSectionFromEngine()
+                updateActiveProgramSectionFromEngine()
                 syncToRemote()
             }
         }
@@ -100,7 +100,7 @@ final class MetronomeViewModel: ObservableObject {
                     engine.denominator = newDenom
                     refreshValidNoteValues()
                     syncNoteValueToDenominator()
-                    updateFirstProgramSectionFromEngine()
+                    updateActiveProgramSectionFromEngine()
                     syncToRemote()
                 }
             }
@@ -137,7 +137,7 @@ final class MetronomeViewModel: ObservableObject {
         set {
             objectWillChange.send()
             engine.beatPattern = newValue
-            updateFirstProgramSectionFromEngine()
+            updateActiveProgramSectionFromEngine()
         }
     }
 
@@ -146,7 +146,7 @@ final class MetronomeViewModel: ObservableObject {
         set {
             objectWillChange.send()
             engine.accents = newValue
-            updateFirstProgramSectionFromEngine()
+            updateActiveProgramSectionFromEngine()
         }
     }
 
@@ -302,7 +302,7 @@ final class MetronomeViewModel: ObservableObject {
                 if self.engine.bpm != bpm {
                     self.objectWillChange.send()
                     self.engine.bpm = bpm
-                    self.updateFirstProgramSectionFromEngine(sync: false)
+                    self.updateActiveProgramSectionFromEngine(sync: false)
                 }
             }
             .store(in: &cancellables)
@@ -316,7 +316,7 @@ final class MetronomeViewModel: ObservableObject {
                     self.objectWillChange.send()
                     self.engine.numerator = num
                     self.refreshValidNoteValues()
-                    self.updateFirstProgramSectionFromEngine(sync: false)
+                    self.updateActiveProgramSectionFromEngine(sync: false)
                 }
             }
             .store(in: &cancellables)
@@ -331,7 +331,7 @@ final class MetronomeViewModel: ObservableObject {
                     self.engine.denominator = den
                     self.refreshValidNoteValues()
                     self.syncNoteValueToDenominator()
-                    self.updateFirstProgramSectionFromEngine(sync: false)
+                    self.updateActiveProgramSectionFromEngine(sync: false)
                 }
             }
             .store(in: &cancellables)
@@ -381,13 +381,13 @@ final class MetronomeViewModel: ObservableObject {
         let currentIndex = rhythmMode.rawValue
         let nextIndex = (currentIndex + 1) % allModes.count
         rhythmMode = allModes[nextIndex]
-        updateFirstProgramSectionFromEngine()
+        updateActiveProgramSectionFromEngine()
     }
 
     func selectNoteValue(at index: Int) {
         guard noteValueOptions.indices.contains(index) else { return }
         noteValueIndex = index
-        updateFirstProgramSectionFromEngine()
+        updateActiveProgramSectionFromEngine()
     }
 
     func togglePlayback(sync: Bool = true) {
@@ -420,8 +420,9 @@ final class MetronomeViewModel: ObservableObject {
             currentBarIndex = min(currentBarIndex, max(0, activeSection.bars - 1))
         }
         engine.applyProgram(newProgram, resetPosition: resetPosition)
-        if let first = newProgram.sections.first {
-            syncEditableState(from: first)
+        let syncIndex = resetPosition ? 0 : currentSectionIndex
+        if let section = newProgram.sections[safe: syncIndex] ?? newProgram.sections.first {
+            syncEditableState(from: section)
         }
         if sync {
             ConnectivityManager.shared.sendProgram(newProgram)
@@ -504,21 +505,23 @@ final class MetronomeViewModel: ObservableObject {
         syncNoteValue(to: section.referenceNoteMultiplier)
     }
 
-    private func updateFirstProgramSectionFromEngine(sync: Bool = true) {
+    private func updateActiveProgramSectionFromEngine(sync: Bool = true) {
         guard !program.sections.isEmpty else { return }
         var nextProgram = program
+        let targetIndex = min(currentSectionIndex, max(0, nextProgram.sections.count - 1))
+        let currentSection = nextProgram.sections[targetIndex]
         let section = ProgramSection(
-            id: nextProgram.sections[0].id,
-            name: nextProgram.sections[0].name,
-            meter: MeterPattern(id: nextProgram.sections[0].meter.id, numerator: engine.beatPattern.reduce(0, +), denominator: engine.denominator),
+            id: currentSection.id,
+            name: currentSection.name,
+            meter: MeterPattern(id: currentSection.meter.id, numerator: engine.beatPattern.reduce(0, +), denominator: engine.denominator),
             bpm: engine.bpm,
-            bars: nextProgram.sections[0].bars,
+            bars: currentSection.bars,
             referenceNoteMultiplier: engine.referenceNoteMultiplier,
             rhythmMode: engine.rhythmMode,
-            tempoAutomation: nextProgram.sections[0].tempoAutomation,
+            tempoAutomation: currentSection.tempoAutomation,
             accents: engine.accents
         )
-        nextProgram.sections[0] = section
+        nextProgram.sections[targetIndex] = section
         program = nextProgram
         if sync {
             ConnectivityManager.shared.sendProgram(nextProgram)
