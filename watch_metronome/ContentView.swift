@@ -11,30 +11,77 @@ struct ContentView: View {
     @State private var selectedTab = 1 // Main (PlayDashboard) is center
     @State private var queuedDraft = ProgramSection(
         name: "Next",
-        meter: MeterPattern(groups: [4], denominator: 4),
+        meter: MeterPattern(numerator: 4, denominator: 4),
         bpm: 120,
         bars: 1
     )
     @State private var queuedLoops = true
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            CompositeEditor(viewModel: viewModel)
-                .tag(0)
+        ZStack {
+            TabView(selection: $selectedTab) {
+                CompositeEditor(viewModel: viewModel)
+                    .tag(0)
 
-            PlayDashboard(viewModel: viewModel, queuedDraft: $queuedDraft, queuedLoops: $queuedLoops)
-                .tag(1)
+                PlayDashboard(viewModel: viewModel, queuedDraft: $queuedDraft, queuedLoops: $queuedLoops)
+                    .tag(1)
 
-            PresetLibrary(viewModel: viewModel)
-                .tag(2)
+                PresetLibrary(viewModel: viewModel)
+                    .tag(2)
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
         }
-        .tabViewStyle(.page(indexDisplayMode: .never))
+        .safeAreaInset(edge: .bottom) {
+            ScreenIndexBar(selectedTab: $selectedTab)
+        }
         .preferredColorScheme(.dark)
         .onAppear {
             if viewModel.program.name == MetronomeProgram.defaultProgram.name {
                 viewModel.applyProgram(.iPhoneStarterProgram)
             }
         }
+    }
+}
+
+@available(iOS 16.7, *)
+private struct ScreenIndexBar: View {
+    @Binding var selectedTab: Int
+
+    private let tabs: [(Int, String, String)] = [
+        (0, "Complex", "square.stack.3d.up"),
+        (1, "Main", "metronome"),
+        (2, "Presets", "tray.full")
+    ]
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(tabs, id: \.0) { tab in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        selectedTab = tab.0
+                    }
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: tab.2)
+                            .font(.system(size: 16, weight: .semibold))
+                        Text(tab.1)
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .foregroundStyle(selectedTab == tab.0 ? .black : .white.opacity(0.68))
+                    .background(
+                        selectedTab == tab.0 ? Color.cyan : Color.white.opacity(0.08),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
+        .background(.black.opacity(0.92))
     }
 }
 
@@ -48,54 +95,54 @@ private struct CompositeEditor: View {
                 Color.black.ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        SectionHeader(title: "Mixed Meter & Groups")
-                        MeterFullEditor(section: currentSectionBinding)
+                        SectionHeader(title: "Composite Meter Modules")
 
-                        SectionHeader(title: "Special Accents")
-                        AccentEditor(viewModel: viewModel)
+                        ForEach(viewModel.program.sections) { section in
+                            MeterModuleCard(
+                                viewModel: viewModel,
+                                section: binding(for: section),
+                                canDelete: viewModel.program.sections.count > 1
+                            ) {
+                                viewModel.removeSection(section)
+                            }
 
-                        SectionHeader(title: "Section Properties")
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text("Bars")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Stepper(value: barsBinding, in: 1...999) {
-                                    Text("\(currentSection.bars)")
-                                        .font(.system(size: 20, weight: .bold).monospacedDigit())
+                            if section.id != viewModel.program.sections.last?.id {
+                                HStack {
+                                    Rectangle()
+                                        .fill(Color.cyan.opacity(0.45))
+                                        .frame(width: 2, height: 22)
+                                        .padding(.leading, 24)
+                                    Spacer()
                                 }
                             }
-                            Spacer()
-                            Toggle("Loop", isOn: loopBinding)
-                                .fixedSize()
                         }
+
+                        Button {
+                            viewModel.addSection()
+                        } label: {
+                            Label("Add Meter Module", systemImage: "plus.circle.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.cyan)
+
+                        Toggle("Loop Composite", isOn: loopBinding)
+                            .padding(14)
+                            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
-                    .padding(18)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 18)
+                    .padding(.bottom, 28)
                 }
             }
-            .navigationTitle("Complex Setup")
+            .navigationTitle("Composite")
         }
     }
 
-    private var currentSection: ProgramSection {
-        viewModel.program.sections.first ?? ProgramSection()
-    }
-
-    private var currentSectionBinding: Binding<ProgramSection> {
+    private func binding(for section: ProgramSection) -> Binding<ProgramSection> {
         Binding(
-            get: { currentSection },
+            get: { viewModel.program.sections.first(where: { $0.id == section.id }) ?? section },
             set: { viewModel.updateSection($0) }
-        )
-    }
-
-    private var barsBinding: Binding<Int> {
-        Binding(
-            get: { currentSection.bars },
-            set: {
-                var s = currentSection
-                s.bars = $0
-                viewModel.updateSection(s)
-            }
         )
     }
 
@@ -123,83 +170,87 @@ private struct SectionHeader: View {
 }
 
 @available(iOS 16.7, *)
-private struct AccentEditor: View {
+private struct MeterModuleCard: View {
     @ObservedObject var viewModel: MetronomeViewModel
+    @Binding var section: ProgramSection
+    let canDelete: Bool
+    var onDelete: () -> Void
 
     var body: some View {
-        let count = max(1, viewModel.numerator)
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: min(count, 8))
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(section.meter.displayName)
+                        .font(.system(size: 30, weight: .black).monospacedDigit())
+                    Text("\(section.bars) bars  \(section.bpm) BPM")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
+                }
+                .disabled(!canDelete)
+            }
 
-        LazyVGrid(columns: columns, spacing: 12) {
-            ForEach(0..<count, id: \.self) { index in
-                Button {
-                    toggleAccent(at: index)
-                } label: {
-                    VStack(spacing: 4) {
-                        Text("\(index + 1)")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.secondary)
+            TextField("Module name", text: $section.name)
+                .textFieldStyle(.roundedBorder)
 
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(isAccented(index) ? Color.cyan.opacity(0.3) : Color.white.opacity(0.1))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .stroke(isAccented(index) ? Color.cyan : Color.clear, lineWidth: 2)
-                                )
-                                .frame(height: 40)
+            MeterFullEditor(section: $section)
 
-                            if isAccented(index) {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundStyle(.cyan)
-                            }
-                        }
+            HStack {
+                NumberField(title: "BPM", value: $section.bpm, range: 40...400)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Bars")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Stepper(value: $section.bars, in: 1...999) {
+                        Text("\(section.bars)")
+                            .font(.system(size: 18, weight: .bold).monospacedDigit())
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                .buttonStyle(.plain)
-                .disabled(index == 0) // 1拍目は固定
             }
-        }
-        .padding(12)
-        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
 
-        Button(viewModel.accents == nil ? "Enable Special Accents" : "Reset to Default Groups") {
-            if viewModel.accents == nil {
-                viewModel.accents = Array(repeating: false, count: count)
-            } else {
-                viewModel.accents = nil
+            Slider(value: bpmSlider, in: 40...400, step: 1) {
+                Text("BPM")
             }
+
+            Picker("Note", selection: noteBinding) {
+                ForEach(viewModel.noteValueOptions.indices, id: \.self) { index in
+                    Text(viewModel.noteValueOptions[index].name)
+                        .tag(viewModel.noteValueOptions[index].multiplier)
+                }
+            }
+            .pickerStyle(.menu)
+
+            SectionAccentEditor(section: $section)
+
+            DisclosureGroup("Tempo Automation") {
+                TempoAutomationEditor(automation: $section.tempoAutomation, startBpm: section.bpm)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
-        .font(.caption)
-        .padding(.top, 4)
+        .padding(14)
+        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
-    private func isAccented(_ index: Int) -> Bool {
-        if index == 0 { return true }
-        guard let accents = viewModel.accents, accents.indices.contains(index) else { return false }
-        return accents[index]
+    private var bpmSlider: Binding<Double> {
+        Binding(
+            get: { Double(section.bpm) },
+            set: { section.bpm = Int($0) }
+        )
     }
 
-    private func toggleAccent(at index: Int) {
-        var current = normalizedAccents()
-        current[index].toggle()
-        viewModel.accents = current
-    }
-
-    private func normalizedAccents() -> [Bool] {
-        var current = viewModel.accents ?? []
-        let count = max(1, viewModel.numerator)
-        if current.count < count {
-            current.append(contentsOf: Array(repeating: false, count: count - current.count))
-        } else if current.count > count {
-            current = Array(current.prefix(count))
-        }
-        return current
+    private var noteBinding: Binding<Double> {
+        Binding(
+            get: { section.referenceNoteMultiplier },
+            set: { section.referenceNoteMultiplier = $0 }
+        )
     }
 }
 
-@available(iOS 16.7, *)
 private struct PresetLibrary: View {
     @ObservedObject var viewModel: MetronomeViewModel
     @State private var presetName = ""
@@ -278,6 +329,7 @@ private struct PlayDashboard: View {
     @State private var isQueueEditorPresented = false
     @State private var tempoTargetBpm = 96
     @State private var tempoBars = 4
+    @State private var bpmDragStart: Int?
 
     var body: some View {
         NavigationStack {
@@ -325,6 +377,19 @@ private struct PlayDashboard: View {
                 }
             }
             .buttonStyle(.plain)
+            .gesture(
+                DragGesture(minimumDistance: 8)
+                    .onChanged { value in
+                        if bpmDragStart == nil {
+                            bpmDragStart = viewModel.bpm
+                        }
+                        let delta = Int(round(-value.translation.height / 3.0))
+                        viewModel.bpm = min(400, max(40, (bpmDragStart ?? viewModel.bpm) + delta))
+                    }
+                    .onEnded { _ in
+                        bpmDragStart = nil
+                    }
+            )
             .sheet(isPresented: $isBpmEditing) {
                 BpmDirectInput(bpm: bpmBinding)
                     .presentationDetents([.height(200)])
@@ -417,7 +482,7 @@ private struct PlayDashboard: View {
                     .font(.headline)
                     .foregroundStyle(.cyan)
                 Spacer()
-                if let queued = viewModel.queuedChange {
+                if viewModel.queuedChange != nil {
                     Text("Armed")
                         .font(.caption.bold())
                         .foregroundStyle(.orange)
@@ -534,7 +599,7 @@ private struct BasicMeterRoller: View {
     var body: some View {
         HStack(spacing: 0) {
             Picker("Numerator", selection: numeratorBinding) {
-                ForEach(0...32, id: \.self) { value in
+                ForEach(1...32, id: \.self) { value in
                     Text("\(value)").tag(value)
                 }
             }
@@ -625,6 +690,10 @@ private struct QueueDetailEditor: View {
                     SectionAccentEditor(section: $section)
                 }
 
+                Section("Tempo Automation") {
+                    TempoAutomationEditor(automation: $section.tempoAutomation, startBpm: section.bpm)
+                }
+
                 Section("Composite Options") {
                     Stepper(value: $section.bars, in: 1...999) {
                         Text("Bars: \(section.bars)")
@@ -704,137 +773,16 @@ private struct SectionAccentEditor: View {
     }
 }
 
-@available(iOS 16.7, *)
-private struct ProgramEditor: View {
-    @ObservedObject var viewModel: MetronomeViewModel
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Toggle("Loop Program", isOn: Binding(
-                        get: { viewModel.program.loops },
-                        set: { value in
-                            var program = viewModel.program
-                            program.loops = value
-                            viewModel.applyProgram(program)
-                        }
-                    ))
-                }
-
-                ForEach(viewModel.program.sections) { section in
-                    SectionEditor(
-                        viewModel: viewModel,
-                        section: binding(for: section)
-                    ) {
-                        viewModel.removeSection(section)
-                    }
-                }
-            }
-            .navigationTitle("Program")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        viewModel.addSection()
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                }
-            }
-        }
-    }
-
-    private func binding(for section: ProgramSection) -> Binding<ProgramSection> {
-        Binding(
-            get: {
-                viewModel.program.sections.first(where: { $0.id == section.id }) ?? section
-            },
-            set: { newValue in
-                viewModel.updateSection(newValue)
-            }
-        )
-    }
-}
-
-@available(iOS 16.7, *)
-private struct SectionEditor: View {
-    @ObservedObject var viewModel: MetronomeViewModel
-    @Binding var section: ProgramSection
-    var onDelete: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                TextField("Name", text: $section.name)
-                    .font(.headline)
-                Spacer()
-                Button(role: .destructive, action: onDelete) {
-                    Image(systemName: "trash")
-                }
-                .buttonStyle(.borderless)
-            }
-
-            MeterFullEditor(section: $section)
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    NumberField(title: "BPM", value: $section.bpm, range: 40...400)
-                    NumberField(title: "Bars", value: $section.bars, range: 1...64)
-                }
-
-                Slider(value: bpmSlider, in: 40...400, step: 1) {
-                    Text("BPM")
-                }
-            }
-
-            HStack {
-                Picker("Click", selection: $section.rhythmModeRawValue) {
-                    Text("Full").tag(RhythmMode.all.rawValue)
-                    Text("Beat").tag(RhythmMode.strongMedium.rawValue)
-                    Text("Bar").tag(RhythmMode.strongOnly.rawValue)
-                }
-                .pickerStyle(.segmented)
-
-                Picker("Note", selection: noteBinding) {
-                    ForEach(viewModel.noteValueOptions.indices, id: \.self) { index in
-                        Text(viewModel.noteValueOptions[index].name)
-                            .tag(viewModel.noteValueOptions[index].multiplier)
-                    }
-                }
-                .pickerStyle(.menu)
-            }
-
-            TempoAutomationEditor(automation: $section.tempoAutomation, startBpm: section.bpm)
-        }
-        .padding(.vertical, 6)
-    }
-
-    private var bpmSlider: Binding<Double> {
-        Binding(
-            get: { Double(section.bpm) },
-            set: { section.bpm = Int($0) }
-        )
-    }
-
-    private var noteBinding: Binding<Double> {
-        Binding(
-            get: { section.referenceNoteMultiplier },
-            set: { section.referenceNoteMultiplier = $0 }
-        )
-    }
-}
-
-@available(iOS 16.7, *)
 private struct MeterDraftEditor: View {
     @Binding var section: ProgramSection
 
     var body: some View {
         Menu(section.meter.displayName) {
-            Button("4/4") { section.meter = MeterPattern(groups: [4], denominator: 4) }
-            Button("3/4") { section.meter = MeterPattern(groups: [3], denominator: 4) }
-            Button("6/8") { section.meter = MeterPattern(groups: [3, 3], denominator: 8) }
-            Button("7/8") { section.meter = MeterPattern(groups: [3, 2, 2], denominator: 8) }
-            Button("5/8") { section.meter = MeterPattern(groups: [3, 2], denominator: 8) }
+            Button("4/4") { section.meter = MeterPattern(numerator: 4, denominator: 4) }
+            Button("3/4") { section.meter = MeterPattern(numerator: 3, denominator: 4) }
+            Button("5/8") { section.meter = MeterPattern(numerator: 5, denominator: 8) }
+            Button("7/8") { section.meter = MeterPattern(numerator: 7, denominator: 8) }
+            Button("12/8") { section.meter = MeterPattern(numerator: 12, denominator: 8) }
         }
         .frame(maxWidth: .infinity)
         .buttonStyle(.bordered)
@@ -852,64 +800,56 @@ private struct MeterFullEditor: View {
                 Text(section.meter.displayName)
                     .font(.system(size: 22, weight: .bold).monospacedDigit())
                 Spacer()
+            }
+
+            HStack(spacing: 0) {
+                Picker("Numerator", selection: numeratorBinding) {
+                    ForEach(1...32, id: \.self) { value in
+                        Text("\(value)").tag(value)
+                    }
+                }
+                .pickerStyle(.wheel)
+                .frame(maxWidth: .infinity)
+                .frame(height: 94)
+                .clipped()
+
+                Text("/")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(.secondary)
+
                 Picker("Denominator", selection: denominatorBinding) {
                     ForEach(denominatorOptions, id: \.self) { value in
                         Text("\(value)").tag(value)
                     }
                 }
                 .pickerStyle(.wheel)
-                .frame(width: 92, height: 86)
+                .frame(maxWidth: .infinity)
+                .frame(height: 94)
                 .clipped()
             }
-
-            HStack(spacing: 8) {
-                ForEach(section.meter.groups.indices, id: \.self) { index in
-                    Stepper(value: groupBinding(index), in: 1...12) {
-                        Text("\(section.meter.groups[index])")
-                            .font(.system(size: 17, weight: .bold).monospacedDigit())
-                            .frame(width: 22)
-                    }
-                    .labelsHidden()
-                    .frame(width: 72)
-                }
-
-                Button {
-                    section.meter.groups.append(2)
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                }
-
-                Button {
-                    if section.meter.groups.count > 1 {
-                        section.meter.groups.removeLast()
-                    }
-                } label: {
-                    Image(systemName: "minus.circle.fill")
-                }
-                .disabled(section.meter.groups.count <= 1)
-            }
+            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             HStack {
-                Button("4/4") { section.meter = MeterPattern(groups: [4], denominator: 4) }
-                Button("7/8") { section.meter = MeterPattern(groups: [3, 2, 2], denominator: 8) }
-                Button("5/8") { section.meter = MeterPattern(groups: [3, 2], denominator: 8) }
-                Button("12/8") { section.meter = MeterPattern(groups: [3, 3, 3, 3], denominator: 8) }
+                Button("4/4") { section.meter = MeterPattern(numerator: 4, denominator: 4) }
+                Button("7/8") { section.meter = MeterPattern(numerator: 7, denominator: 8) }
+                Button("5/8") { section.meter = MeterPattern(numerator: 5, denominator: 8) }
+                Button("12/8") { section.meter = MeterPattern(numerator: 12, denominator: 8) }
             }
             .buttonStyle(.bordered)
         }
     }
 
-    private var denominatorBinding: Binding<Int> {
+    private var numeratorBinding: Binding<Int> {
         Binding(
-            get: { section.meter.denominator },
-            set: { section.meter.denominator = $0 }
+            get: { section.meter.numerator },
+            set: { section.meter = MeterPattern(id: section.meter.id, numerator: $0, denominator: section.meter.denominator) }
         )
     }
 
-    private func groupBinding(_ index: Int) -> Binding<Int> {
+    private var denominatorBinding: Binding<Int> {
         Binding(
-            get: { section.meter.groups[index] },
-            set: { section.meter.groups[index] = max(1, $0) }
+            get: { section.meter.denominator },
+            set: { section.meter = MeterPattern(id: section.meter.id, numerator: section.meter.numerator, denominator: $0) }
         )
     }
 }

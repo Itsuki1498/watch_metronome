@@ -20,15 +20,15 @@ struct MetronomeEngineTests {
         
         var recordedBeats: [Int] = []
         var recordedStrongFlags: [Bool] = []
-        let lock = NSLock()
+        let recordingQueue = DispatchQueue(label: "metronome.test.fourFour")
         
         // エンジンが鳴った時の記録を取る
         engine.onTick = { beat, intensity, _ in
             guard intensity != .silence else { return }
-            lock.lock()
-            recordedBeats.append(Int(beat))
-            recordedStrongFlags.append(intensity == .strong)
-            lock.unlock()
+            recordingQueue.sync {
+                recordedBeats.append(Int(beat))
+                recordedStrongFlags.append(intensity == .strong)
+            }
         }
         
         engine.start()
@@ -40,10 +40,9 @@ struct MetronomeEngineTests {
         
         // --- 答え合わせ ---
         // 少なくとも4回以上は鳴っているはず
-        lock.lock()
-        let beats = recordedBeats
-        let strongFlags = recordedStrongFlags
-        lock.unlock()
+        let (beats, strongFlags) = recordingQueue.sync {
+            (recordedBeats, recordedStrongFlags)
+        }
         
         #expect(beats.count >= 4)
         // 1拍目、2拍目、3拍目、4拍目と記録されているはず
@@ -59,20 +58,19 @@ struct MetronomeEngineTests {
         #expect(strongFlags[3] == false)
     }
 
-    @Test("分子が0の時、全て弱拍になるかテスト")
-    func testZeroNumerator() async throws {
+    @Test("分子が0の時、1拍子に補正されるかテスト")
+    func testZeroNumeratorClampsToOne() async throws {
         let engine = MetronomeEngine()
         engine.bpm = 600
-        engine.numerator = 0 // 強拍なし設定
+        engine.numerator = 0
         
-        var strongCount = 0
-        let lock = NSLock()
+        var recordedIntensities: [BeatIntensity] = []
+        let recordingQueue = DispatchQueue(label: "metronome.test.zeroNumerator")
         
         engine.onTick = { _, intensity, _ in
-            if intensity == .strong {
-                lock.lock()
-                strongCount += 1
-                lock.unlock()
+            guard intensity != .silence else { return }
+            recordingQueue.sync {
+                recordedIntensities.append(intensity)
             }
         }
         
@@ -80,11 +78,12 @@ struct MetronomeEngineTests {
         try await Task.sleep(nanoseconds: 300_000_000)
         engine.stop()
         
-        // 強拍が一度も鳴っていない(0回)ことを確認
-        lock.lock()
-        let recordedStrongCount = strongCount
-        lock.unlock()
-        #expect(recordedStrongCount == 0)
+        let intensities = recordingQueue.sync {
+            recordedIntensities
+        }
+        #expect(engine.numerator == 1)
+        #expect(!intensities.isEmpty)
+        #expect(intensities.allSatisfy { $0 == .strong })
     }
     
     @Test("分子が1の時、全て強拍になるかテスト")
@@ -94,14 +93,14 @@ struct MetronomeEngineTests {
         engine.numerator = 1 // 全て強拍設定
         
         var weakCount = 0
-        let lock = NSLock()
+        let recordingQueue = DispatchQueue(label: "metronome.test.oneNumerator")
         
         engine.onTick = { _, intensity, _ in
             guard intensity != .silence else { return }
             if intensity != .strong {
-                lock.lock()
-                weakCount += 1
-                lock.unlock()
+                recordingQueue.sync {
+                    weakCount += 1
+                }
             }
         }
         
@@ -110,9 +109,40 @@ struct MetronomeEngineTests {
         engine.stop()
         
         // 弱拍が一度も鳴っていない(0回)ことを確認
-        lock.lock()
-        let recordedWeakCount = weakCount
-        lock.unlock()
+        let recordedWeakCount = recordingQueue.sync {
+            weakCount
+        }
         #expect(recordedWeakCount == 0)
+    }
+
+    @Test("テンポ変化が指定小節数の最終小節で目標BPMに到達するかテスト")
+    func testTempoAutomationReachesTargetOnFinalBar() async throws {
+        let engine = MetronomeEngine()
+        let section = ProgramSection(
+            name: "rit.",
+            meter: MeterPattern(numerator: 1, denominator: 4),
+            bpm: 400,
+            bars: 4,
+            tempoAutomation: TempoAutomation(shape: .ritardando, targetBpm: 100, lengthInBars: 4)
+        )
+        engine.applyProgram(MetronomeProgram(name: "Tempo", sections: [section], loops: false))
+
+        var recordedBpms: [Int] = []
+        let recordingQueue = DispatchQueue(label: "metronome.test.tempoAutomation")
+        engine.onMeasureStart = { _, _, _ in
+            recordingQueue.sync {
+                recordedBpms.append(engine.bpm)
+            }
+        }
+
+        engine.start()
+        try await Task.sleep(nanoseconds: 700_000_000)
+        engine.stop()
+
+        let bpms = recordingQueue.sync {
+            recordedBpms
+        }
+
+        #expect(Array(bpms.prefix(3)) == [300, 200, 100])
     }
 }

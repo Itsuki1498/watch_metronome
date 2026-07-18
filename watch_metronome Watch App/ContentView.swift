@@ -78,7 +78,7 @@ struct ContentView: View {
             // 中央：拍子設定
             HStack(spacing: 4) {
                 settingItem(target: .numerator, label: "\(viewModel.numerator)", size: 28, hPadding: 8)
-                    .digitalCrownRotation(binding(\.displayNumerator), from: 0, through: 32, by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
+                    .digitalCrownRotation(binding(\.displayNumerator), from: 1, through: 32, by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                 
                 Text("/")
                     .font(.system(size: 22, weight: .bold))

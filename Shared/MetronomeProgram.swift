@@ -16,13 +16,18 @@ struct MeterPattern: Codable, Hashable, Identifiable {
         self.denominator = denominator
     }
 
+    init(id: UUID = UUID(), numerator: Int, denominator: Int) {
+        self.id = id
+        self.groups = [max(1, numerator)]
+        self.denominator = denominator
+    }
+
     var numerator: Int {
-        groups.reduce(0, +)
+        max(1, groups.reduce(0, +))
     }
 
     var displayName: String {
-        let groupText = groups.map(String.init).joined(separator: "+")
-        return "\(groupText)/\(denominator)"
+        "\(numerator)/\(denominator)"
     }
 }
 
@@ -92,11 +97,20 @@ struct QueuedMetronomeChange: Codable, Hashable, Identifiable {
     var id: UUID
     var section: ProgramSection
     var loops: Bool
+    var program: MetronomeProgram?
 
     init(id: UUID = UUID(), section: ProgramSection, loops: Bool = true) {
         self.id = id
         self.section = section
         self.loops = loops
+        self.program = nil
+    }
+
+    init(id: UUID = UUID(), program: MetronomeProgram) {
+        self.id = id
+        self.section = program.sections.first ?? ProgramSection()
+        self.loops = program.loops
+        self.program = program
     }
 }
 
@@ -143,7 +157,7 @@ struct MetronomeProgram: Codable, Hashable, Identifiable {
         MetronomeProgram(
             name: "Basic",
             sections: [
-                ProgramSection(name: "4/4", meter: MeterPattern(groups: [4], denominator: 4), bpm: 120, bars: 1)
+                ProgramSection(name: "4/4", meter: MeterPattern(numerator: 4, denominator: 4), bpm: 120, bars: 1)
             ],
             loops: true
         )
@@ -153,8 +167,8 @@ struct MetronomeProgram: Codable, Hashable, Identifiable {
         MetronomeProgram(
             name: "Practice",
             sections: [
-                ProgramSection(name: "4/4", meter: MeterPattern(groups: [4], denominator: 4), bpm: 120, bars: 4),
-                ProgramSection(name: "7/8", meter: MeterPattern(groups: [3, 2, 2], denominator: 8), bpm: 120, bars: 2)
+                ProgramSection(name: "4/4", meter: MeterPattern(numerator: 4, denominator: 4), bpm: 120, bars: 2),
+                ProgramSection(name: "7/8", meter: MeterPattern(numerator: 7, denominator: 8), bpm: 120, bars: 2)
             ],
             loops: true
         )

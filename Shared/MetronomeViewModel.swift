@@ -355,7 +355,7 @@ final class MetronomeViewModel: ObservableObject {
     private func syncToRemote() {
         ConnectivityManager.shared.sendStatus(
             bpm: engine.bpm,
-            numerator: engine.numerator,
+            numerator: numerator,
             denominator: engine.denominator
         )
     }
@@ -419,7 +419,8 @@ final class MetronomeViewModel: ObservableObject {
             bars: template.bars,
             referenceNoteMultiplier: template.referenceNoteMultiplier,
             rhythmMode: template.rhythmMode,
-            tempoAutomation: template.tempoAutomation
+            tempoAutomation: template.tempoAutomation,
+            accents: template.accents
         )
         if let sectionID, let index = nextProgram.sections.firstIndex(where: { $0.id == sectionID }) {
             nextProgram.sections.insert(next, at: index + 1)
@@ -438,6 +439,13 @@ final class MetronomeViewModel: ObservableObject {
 
     func queueChange(section: ProgramSection, loops: Bool = true) {
         let change = QueuedMetronomeChange(section: section, loops: loops)
+        queuedChange = change
+        engine.queueChangeForNextMeasure(change)
+        ConnectivityManager.shared.sendQueuedChange(change)
+    }
+
+    func queueProgram(_ program: MetronomeProgram) {
+        let change = QueuedMetronomeChange(program: program)
         queuedChange = change
         engine.queueChangeForNextMeasure(change)
         ConnectivityManager.shared.sendQueuedChange(change)
@@ -466,11 +474,12 @@ final class MetronomeViewModel: ObservableObject {
     }
 
     private func applySectionToEditableState(_ section: ProgramSection) {
-        engine.beatPattern = section.meter.groups
+        engine.numerator = section.meter.numerator
         engine.denominator = section.meter.denominator
         engine.bpm = section.bpm
         engine.referenceNoteMultiplier = section.referenceNoteMultiplier
         engine.rhythmMode = section.rhythmMode
+        engine.accents = section.accents
         refreshValidNoteValues()
     }
 
@@ -480,7 +489,7 @@ final class MetronomeViewModel: ObservableObject {
         let section = ProgramSection(
             id: nextProgram.sections[0].id,
             name: nextProgram.sections[0].name,
-            meter: MeterPattern(id: nextProgram.sections[0].meter.id, groups: engine.beatPattern, denominator: engine.denominator),
+            meter: MeterPattern(id: nextProgram.sections[0].meter.id, numerator: engine.beatPattern.reduce(0, +), denominator: engine.denominator),
             bpm: engine.bpm,
             bars: nextProgram.sections[0].bars,
             referenceNoteMultiplier: engine.referenceNoteMultiplier,
@@ -514,7 +523,9 @@ final class MetronomeViewModel: ObservableObject {
     }
 
     func queuePresetProfile(_ profile: PresetProfile) {
-        if let section = profile.program.sections.first {
+        if profile.kind == .composite {
+            queueProgram(profile.program)
+        } else if let section = profile.program.sections.first {
             queueChange(section: section, loops: profile.program.loops)
         }
     }

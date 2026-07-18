@@ -9,7 +9,7 @@ import Foundation
 
 /// 拍の強さ
 enum BeatIntensity: Hashable {
-    case strong   // 強拍 (小節頭 or グループ頭)
+    case strong   // 強拍 (小節頭)
     case medium   // 中拍 (拍の頭)
     case weak     // 弱拍 (裏拍等)
     case silence  // 無音
@@ -34,6 +34,7 @@ final class MetronomeEngine {
 
     var numerator: Int = 4 {
         didSet {
+            numerator = max(1, numerator)
             // 外部から分子が変えられたら、単一の拍グループとしてパターンをリセット
             beatPattern = [numerator]
             updateConstants()
@@ -44,10 +45,12 @@ final class MetronomeEngine {
         didSet { updateConstants() }
     }
 
-    /// 複合拍子（Mixed Meter）をサポートするためのパターン
-    /// 例: [3, 2] = 5拍子 (3+2), [2, 2, 3] = 7拍子 (2+2+3)
+    /// 現在小節の分子。互換性のため配列のまま保持するが、iPhone 側の複合拍子は小節モジュール列で表現する。
     var beatPattern: [Int] = [4] {
-        didSet { updateConstants() }
+        didSet {
+            beatPattern = beatPattern.isEmpty ? [1] : beatPattern.map { max(1, $0) }
+            updateConstants()
+        }
     }
 
     var referenceNoteMultiplier: Double = 1.0 {
@@ -89,7 +92,7 @@ final class MetronomeEngine {
         let pulseUnit = 0.125
 
         // パターンの合計を現在の分子とする
-        let currentNumerator = beatPattern.reduce(0, +)
+        let currentNumerator = max(1, beatPattern.reduce(0, +))
 
         totalTicksInMeasure = max(1, Int(round((unitDenom * Double(currentNumerator)) / pulseUnit)))
         ticksPerOuterBeat = max(1, Int(round(unitDenom / pulseUnit)))
@@ -122,7 +125,7 @@ final class MetronomeEngine {
     }
 
     private func applySection(_ section: ProgramSection) {
-        beatPattern = section.meter.groups
+        numerator = section.meter.numerator
         denominator = section.meter.denominator
         referenceNoteMultiplier = section.referenceNoteMultiplier
         rhythmMode = section.rhythmMode
@@ -134,7 +137,7 @@ final class MetronomeEngine {
     private func bpmFor(section: ProgramSection, barIndex: Int) -> Int {
         guard section.tempoAutomation.shape != .none else { return section.bpm }
         let length = max(1, min(section.bars, section.tempoAutomation.lengthInBars))
-        let progress = min(1.0, Double(barIndex) / Double(length))
+        let progress = length == 1 ? 1.0 : min(1.0, Double(barIndex) / Double(length - 1))
         let start = Double(section.bpm)
         let end = Double(section.tempoAutomation.targetBpm)
         return min(400, max(40, Int(round(start + (end - start) * progress))))
@@ -201,7 +204,6 @@ final class MetronomeEngine {
         let outerStep = ticksPerOuterBeat
         let refStep = ticksPerRefNote
         let mode = rhythmMode
-        let pattern = beatPattern
         let currentAccents = accents
 
         let unitDenom = 4.0 / Double(denominator)
@@ -212,15 +214,6 @@ final class MetronomeEngine {
 
         let tickIndex = currentTick - 1
         let logicalBeat = Double(tickIndex) / Double(outerStep) + 1.0
-
-        // --- 複合拍子アクセントロジック ---
-        // 累積カウントでグループの頭を特定
-        var groupHeadTicks: [Int] = [0]
-        var currentSum = 0
-        for p in pattern.dropLast() {
-            currentSum += p * outerStep
-            groupHeadTicks.append(currentSum)
-        }
 
         var rawIntensity: BeatIntensity
         if tickIndex == 0 {
@@ -241,8 +234,6 @@ final class MetronomeEngine {
             } else {
                 rawIntensity = .silence
             }
-        } else if groupHeadTicks.contains(tickIndex) {
-            rawIntensity = .strong // グループの頭も強拍として扱う（または必要ならミディアム）
         } else if isRefMultiple {
             if tickIndex % refStep == 0 { rawIntensity = .medium }
             else if tickIndex % outerStep == 0 { rawIntensity = .weak }
@@ -270,10 +261,10 @@ final class MetronomeEngine {
     private func advanceMeasureLocked() {
         if let queuedChange {
             self.queuedChange = nil
-            let section = queuedChange.section
-            program = MetronomeProgram(name: "Queued Change", sections: [section], loops: queuedChange.loops)
+            program = queuedChange.program ?? MetronomeProgram(name: "Queued Change", sections: [queuedChange.section], loops: queuedChange.loops)
             activeSectionIndex = 0
             activeBarIndex = 0
+            let section = program.sections[activeSectionIndex]
             applySection(section)
             onMeasureStart?(activeSectionIndex, activeBarIndex, section)
             return
