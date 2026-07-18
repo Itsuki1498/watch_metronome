@@ -67,6 +67,7 @@ final class MetronomeViewModel: ObservableObject {
         set {
             let newIntValue = Int(newValue)
             if newIntValue != engine.bpm {
+                objectWillChange.send()
                 engine.bpm = newIntValue
                 updateFirstProgramSectionFromEngine()
                 syncToRemote()
@@ -79,6 +80,7 @@ final class MetronomeViewModel: ObservableObject {
         set {
             let newIntValue = Int(newValue)
             if newIntValue != engine.numerator {
+                objectWillChange.send()
                 engine.numerator = newIntValue
                 refreshValidNoteValues()
                 updateFirstProgramSectionFromEngine()
@@ -298,6 +300,7 @@ final class MetronomeViewModel: ObservableObject {
                 if self.engine.bpm != bpm {
                     self.objectWillChange.send()
                     self.engine.bpm = bpm
+                    self.updateFirstProgramSectionFromEngine(sync: false)
                 }
             }
             .store(in: &cancellables)
@@ -311,6 +314,7 @@ final class MetronomeViewModel: ObservableObject {
                     self.objectWillChange.send()
                     self.engine.numerator = num
                     self.refreshValidNoteValues()
+                    self.updateFirstProgramSectionFromEngine(sync: false)
                 }
             }
             .store(in: &cancellables)
@@ -325,6 +329,7 @@ final class MetronomeViewModel: ObservableObject {
                     self.engine.denominator = den
                     self.refreshValidNoteValues()
                     self.syncNoteValueToDenominator()
+                    self.updateFirstProgramSectionFromEngine(sync: false)
                 }
             }
             .store(in: &cancellables)
@@ -497,7 +502,7 @@ final class MetronomeViewModel: ObservableObject {
         syncNoteValue(to: section.referenceNoteMultiplier)
     }
 
-    private func updateFirstProgramSectionFromEngine() {
+    private func updateFirstProgramSectionFromEngine(sync: Bool = true) {
         guard !program.sections.isEmpty else { return }
         var nextProgram = program
         let section = ProgramSection(
@@ -513,7 +518,9 @@ final class MetronomeViewModel: ObservableObject {
         )
         nextProgram.sections[0] = section
         program = nextProgram
-        ConnectivityManager.shared.sendProgram(nextProgram)
+        if sync {
+            ConnectivityManager.shared.sendProgram(nextProgram)
+        }
     }
 
     func saveCurrentProgramAsPreset(name: String, kind: PresetProfileKind) {
