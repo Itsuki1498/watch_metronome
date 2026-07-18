@@ -222,8 +222,12 @@ final class MetronomeViewModel: ObservableObject {
     private func setupEngine() {
         engine.onMeasureStart = { [weak self] sectionIndex, barIndex, _ in
             DispatchQueue.main.async {
-                self?.currentSectionIndex = sectionIndex
-                self?.currentBarIndex = barIndex
+                guard let self else { return }
+                self.currentSectionIndex = sectionIndex
+                self.currentBarIndex = barIndex
+                if self.queuedChange != nil && sectionIndex == 0 && barIndex == 0 {
+                    self.queuedChange = nil
+                }
             }
         }
         engine.onTick = { [weak self] (beat: Double, intensity: BeatIntensity, tickTime: DispatchTime) in
