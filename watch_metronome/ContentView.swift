@@ -205,7 +205,7 @@ private struct MeterModuleCard: View {
             TextField("Module name", text: $section.name)
                 .textFieldStyle(.roundedBorder)
 
-            MeterFullEditor(section: $section)
+            MeterFullEditor(section: $section, noteValueOptions: viewModel.noteValueOptions)
 
             HStack {
                 NumberField(title: "BPM", value: $section.bpm, range: 40...400)
@@ -226,9 +226,9 @@ private struct MeterModuleCard: View {
             }
 
             Picker("Note", selection: noteBinding) {
-                ForEach(viewModel.noteValueOptions.indices, id: \.self) { index in
-                    Text(viewModel.noteValueOptions[index].name)
-                        .tag(viewModel.noteValueOptions[index].multiplier)
+                ForEach(validNoteOptions.indices, id: \.self) { index in
+                    Text(validNoteOptions[index].name)
+                        .tag(validNoteOptions[index].multiplier)
                 }
             }
             .pickerStyle(.menu)
@@ -259,6 +259,10 @@ private struct MeterModuleCard: View {
             get: { section.referenceNoteMultiplier },
             set: { section.referenceNoteMultiplier = $0 }
         )
+    }
+
+    private var validNoteOptions: [NoteValue] {
+        noteOptions(for: section.meter.denominator, from: viewModel.noteValueOptions)
     }
 }
 
@@ -408,11 +412,14 @@ private struct PlayDashboard: View {
 
             HStack(spacing: 16) {
                 Menu {
-                    ForEach(viewModel.noteValueOptions.indices, id: \.self) { index in
+                    ForEach(viewModel.validNoteValueOptions.indices, id: \.self) { index in
                         Button {
-                            viewModel.selectNoteValue(at: index)
+                            let selected = viewModel.validNoteValueOptions[index]
+                            if let masterIndex = viewModel.noteValueOptions.firstIndex(where: { $0.multiplier == selected.multiplier }) {
+                                viewModel.selectNoteValue(at: masterIndex)
+                            }
                         } label: {
-                            Label(viewModel.noteValueOptions[index].name, image: viewModel.noteValueOptions[index].imageName)
+                            Label(viewModel.validNoteValueOptions[index].name, image: viewModel.validNoteValueOptions[index].imageName)
                         }
                     }
                 } label: {
@@ -704,16 +711,16 @@ private struct QueueDetailEditor: View {
 
                 Section("Note") {
                     Picker("Reference Note", selection: noteBinding) {
-                        ForEach(viewModel.noteValueOptions.indices, id: \.self) { index in
-                            Text(viewModel.noteValueOptions[index].name)
-                                .tag(viewModel.noteValueOptions[index].multiplier)
+                        ForEach(validNoteOptions.indices, id: \.self) { index in
+                            Text(validNoteOptions[index].name)
+                                .tag(validNoteOptions[index].multiplier)
                         }
                     }
                     .pickerStyle(.menu)
                 }
 
                 Section("Meter") {
-                    MeterFullEditor(section: $section)
+                    MeterFullEditor(section: $section, noteValueOptions: viewModel.noteValueOptions)
                 }
 
                 Section("Click Mode") {
@@ -754,6 +761,10 @@ private struct QueueDetailEditor: View {
             get: { section.referenceNoteMultiplier },
             set: { section.referenceNoteMultiplier = $0 }
         )
+    }
+
+    private var validNoteOptions: [NoteValue] {
+        noteOptions(for: section.meter.denominator, from: viewModel.noteValueOptions)
     }
 }
 
@@ -850,6 +861,7 @@ private struct MeterDraftEditor: View {
 @available(iOS 16.7, *)
 private struct MeterFullEditor: View {
     @Binding var section: ProgramSection
+    let noteValueOptions: [NoteValue]
     private let denominatorOptions = [2, 4, 8, 16, 32]
 
     var body: some View {
@@ -907,8 +919,27 @@ private struct MeterFullEditor: View {
     private var denominatorBinding: Binding<Int> {
         Binding(
             get: { section.meter.denominator },
-            set: { section.meter = MeterPattern(id: section.meter.id, numerator: section.meter.numerator, denominator: $0) }
+            set: {
+                section.meter = MeterPattern(id: section.meter.id, numerator: section.meter.numerator, denominator: $0)
+                normalizeReferenceNote()
+            }
         )
+    }
+
+    private func normalizeReferenceNote() {
+        let options = noteOptions(for: section.meter.denominator, from: noteValueOptions)
+        if !options.contains(where: { abs($0.multiplier - section.referenceNoteMultiplier) < 0.001 }) {
+            section.referenceNoteMultiplier = 4.0 / Double(section.meter.denominator)
+        }
+    }
+}
+
+private func noteOptions(for denominator: Int, from options: [NoteValue]) -> [NoteValue] {
+    let unitDenom = 4.0 / Double(denominator)
+    return options.filter { note in
+        let ratio1 = note.multiplier / unitDenom
+        let ratio2 = unitDenom / note.multiplier
+        return abs(ratio1 - round(ratio1)) < 0.001 || abs(ratio2 - round(ratio2)) < 0.001
     }
 }
 
