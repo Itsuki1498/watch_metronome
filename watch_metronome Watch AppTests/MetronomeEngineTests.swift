@@ -145,4 +145,84 @@ struct MetronomeEngineTests {
 
         #expect(Array(bpms.prefix(3)) == [300, 200, 100])
     }
+
+    @Test("複合拍子プログラムがセクションの小節数通りに進むかテスト")
+    func testCompositeProgramAdvancesBySectionBars() async throws {
+        let engine = MetronomeEngine()
+        let program = MetronomeProgram(
+            name: "Composite",
+            sections: [
+                ProgramSection(name: "A", meter: MeterPattern(numerator: 1, denominator: 32), bpm: 400, bars: 2),
+                ProgramSection(name: "B", meter: MeterPattern(numerator: 2, denominator: 32), bpm: 400, bars: 1)
+            ],
+            loops: true
+        )
+        engine.applyProgram(program)
+
+        var recordedPositions: [(Int, Int, String)] = []
+        let recordingQueue = DispatchQueue(label: "metronome.test.compositeAdvance")
+        engine.onMeasureStart = { sectionIndex, barIndex, section in
+            recordingQueue.sync {
+                recordedPositions.append((sectionIndex, barIndex, section.name))
+            }
+        }
+
+        engine.start()
+        try await Task.sleep(nanoseconds: 180_000_000)
+        engine.stop()
+
+        let positions = recordingQueue.sync {
+            recordedPositions
+        }
+
+        #expect(positions.prefix(3).map { $0.0 } == [0, 1, 0])
+        #expect(positions.prefix(3).map { $0.1 } == [1, 0, 0])
+        #expect(positions.prefix(3).map { $0.2 } == ["A", "B", "A"])
+    }
+
+    @Test("次小節キューが小節境界でプログラムごと適用されるかテスト")
+    func testQueuedProgramAppliesAtNextMeasure() async throws {
+        let engine = MetronomeEngine()
+        engine.applyProgram(
+            MetronomeProgram(
+                name: "Base",
+                sections: [
+                    ProgramSection(name: "Base", meter: MeterPattern(numerator: 1, denominator: 32), bpm: 400, bars: 8)
+                ],
+                loops: true
+            )
+        )
+
+        let queuedProgram = MetronomeProgram(
+            name: "Queued",
+            sections: [
+                ProgramSection(name: "QueuedA", meter: MeterPattern(numerator: 3, denominator: 32), bpm: 320, bars: 1),
+                ProgramSection(name: "QueuedB", meter: MeterPattern(numerator: 4, denominator: 32), bpm: 280, bars: 1)
+            ],
+            loops: false
+        )
+
+        var firstAppliedSection: ProgramSection?
+        let recordingQueue = DispatchQueue(label: "metronome.test.queuedProgram")
+        engine.onMeasureStart = { _, _, section in
+            recordingQueue.sync {
+                if firstAppliedSection == nil {
+                    firstAppliedSection = section
+                }
+            }
+        }
+
+        engine.start()
+        engine.queueChangeForNextMeasure(QueuedMetronomeChange(program: queuedProgram))
+        try await Task.sleep(nanoseconds: 220_000_000)
+        engine.stop()
+
+        let appliedSection = recordingQueue.sync {
+            firstAppliedSection
+        }
+
+        #expect(appliedSection?.name == "QueuedA")
+        #expect(appliedSection?.meter.displayName == "3/32")
+        #expect(engine.bpm == 320)
+    }
 }
