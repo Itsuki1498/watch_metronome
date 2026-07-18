@@ -274,7 +274,11 @@ final class MetronomeViewModel: ObservableObject {
 
     private func syncNoteValueToDenominator() {
         let unitDenom = 4.0 / Double(engine.denominator)
-        if let index = noteValueOptions.firstIndex(where: { abs($0.multiplier - unitDenom) < 0.001 }) {
+        syncNoteValue(to: unitDenom)
+    }
+
+    private func syncNoteValue(to multiplier: Double) {
+        if let index = noteValueOptions.firstIndex(where: { abs($0.multiplier - multiplier) < 0.001 }) {
             noteValueIndex = index
         }
     }
@@ -400,7 +404,7 @@ final class MetronomeViewModel: ObservableObject {
         currentBarIndex = 0
         engine.applyProgram(newProgram, resetPosition: resetPosition)
         if let first = newProgram.sections.first {
-            applySectionToEditableState(first)
+            syncEditableState(from: first)
         }
         if sync {
             ConnectivityManager.shared.sendProgram(newProgram)
@@ -478,14 +482,9 @@ final class MetronomeViewModel: ObservableObject {
         ConnectivityManager.shared.sendQueuedChange(nil)
     }
 
-    private func applySectionToEditableState(_ section: ProgramSection) {
-        engine.numerator = section.meter.numerator
-        engine.denominator = section.meter.denominator
-        engine.bpm = section.bpm
-        engine.referenceNoteMultiplier = section.referenceNoteMultiplier
-        engine.rhythmMode = section.rhythmMode
-        engine.accents = section.accents
+    private func syncEditableState(from section: ProgramSection) {
         refreshValidNoteValues()
+        syncNoteValue(to: section.referenceNoteMultiplier)
     }
 
     private func updateFirstProgramSectionFromEngine() {

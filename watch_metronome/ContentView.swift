@@ -879,10 +879,10 @@ private struct TempoAutomationEditor: View {
 
             if automation.shape != .none {
                 HStack {
-                    NumberField(title: "Target", value: $automation.targetBpm, range: 40...400)
+                    NumberField(title: "Target", value: $automation.targetBpm, range: targetRange)
                     NumberField(title: "Bars", value: $automation.lengthInBars, range: 1...64)
                 }
-                Slider(value: targetSlider, in: 40...400, step: 1) {
+                Slider(value: targetSlider, in: Double(targetRange.lowerBound)...Double(targetRange.upperBound), step: 1) {
                     Text("Target")
                 }
                 Text("\(startBpm) -> \(automation.targetBpm) BPM over \(automation.lengthInBars) bars")
@@ -890,13 +890,38 @@ private struct TempoAutomationEditor: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .onAppear {
+            normalizeTarget()
+        }
+        .onChange(of: automation.shape) { _ in
+            normalizeTarget()
+        }
+        .onChange(of: startBpm) { _ in
+            normalizeTarget()
+        }
+    }
+
+    private var targetRange: ClosedRange<Int> {
+        switch automation.shape {
+        case .none:
+            return 40...400
+        case .ritardando:
+            return 40...max(40, startBpm)
+        case .accelerando:
+            return min(400, startBpm)...400
+        }
     }
 
     private var targetSlider: Binding<Double> {
         Binding(
             get: { Double(automation.targetBpm) },
-            set: { automation.targetBpm = Int($0) }
+            set: { automation.targetBpm = min(targetRange.upperBound, max(targetRange.lowerBound, Int($0))) }
         )
+    }
+
+    private func normalizeTarget() {
+        guard automation.shape != .none else { return }
+        automation.targetBpm = min(targetRange.upperBound, max(targetRange.lowerBound, automation.targetBpm))
     }
 }
 
