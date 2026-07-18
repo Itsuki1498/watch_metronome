@@ -529,10 +529,22 @@ private struct PlayDashboard: View {
                 }
 
                 DisclosureGroup("Tempo Change") {
-                    HStack {
-                        NumberField(title: "Target", value: $tempoTargetBpm, range: 40...400)
-                        NumberField(title: "Bars", value: $tempoBars, range: 1...64)
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            NumberField(title: "Target", value: $tempoTargetBpm, range: 40...400)
+                            NumberField(title: "Bars", value: $tempoBars, range: 1...64)
+                        }
+
+                        Slider(value: tempoTargetSlider, in: 40...400, step: 1) {
+                            Text("Target BPM")
+                        }
+
+                        Stepper(value: $tempoBars, in: 1...64) {
+                            Text("Bars: \(tempoBars)")
+                                .font(.caption.monospacedDigit())
+                        }
                     }
+
                     Button {
                         viewModel.queueTempoAutomation(targetBpm: tempoTargetBpm, bars: tempoBars)
                     } label: {
@@ -583,6 +595,13 @@ private struct PlayDashboard: View {
         Binding(
             get: { queuedDraft.bpm },
             set: { queuedDraft.bpm = min(400, max(40, $0)) }
+        )
+    }
+
+    private var tempoTargetSlider: Binding<Double> {
+        Binding(
+            get: { Double(tempoTargetBpm) },
+            set: { tempoTargetBpm = Int($0) }
         )
     }
 
