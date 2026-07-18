@@ -233,6 +233,8 @@ private struct MeterModuleCard: View {
             }
             .pickerStyle(.menu)
 
+            SectionRhythmModePicker(section: $section)
+
             SectionAccentEditor(section: $section)
 
             DisclosureGroup("Tempo Automation") {
@@ -695,6 +697,10 @@ private struct QueueDetailEditor: View {
                     MeterFullEditor(section: $section)
                 }
 
+                Section("Click Mode") {
+                    SectionRhythmModePicker(section: $section)
+                }
+
                 Section("Special Accents") {
                     SectionAccentEditor(section: $section)
                 }
@@ -728,6 +734,30 @@ private struct QueueDetailEditor: View {
         Binding(
             get: { section.referenceNoteMultiplier },
             set: { section.referenceNoteMultiplier = $0 }
+        )
+    }
+}
+
+@available(iOS 16.7, *)
+private struct SectionRhythmModePicker: View {
+    @Binding var section: ProgramSection
+
+    var body: some View {
+        Picker("Click Mode", selection: rhythmModeBinding) {
+            Label("Full", systemImage: "speaker.wave.3.fill")
+                .tag(RhythmMode.all.rawValue)
+            Label("Beat", systemImage: "speaker.wave.1.fill")
+                .tag(RhythmMode.strongMedium.rawValue)
+            Label("Bar", systemImage: "speaker.fill")
+                .tag(RhythmMode.strongOnly.rawValue)
+        }
+        .pickerStyle(.segmented)
+    }
+
+    private var rhythmModeBinding: Binding<Int> {
+        Binding(
+            get: { section.rhythmModeRawValue },
+            set: { section.rhythmModeRawValue = $0 }
         )
     }
 }
