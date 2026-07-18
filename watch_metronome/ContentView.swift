@@ -518,7 +518,7 @@ private struct PlayDashboard: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: 86)
                     .clipped()
-                    MeterDraftEditor(section: $queuedDraft)
+                    MeterDraftEditor(section: $queuedDraft, noteValueOptions: viewModel.noteValueOptions)
                 }
 
                 HStack {
@@ -844,17 +844,30 @@ private struct SectionAccentEditor: View {
 
 private struct MeterDraftEditor: View {
     @Binding var section: ProgramSection
+    let noteValueOptions: [NoteValue]
 
     var body: some View {
         Menu(section.meter.displayName) {
-            Button("4/4") { section.meter = MeterPattern(numerator: 4, denominator: 4) }
-            Button("3/4") { section.meter = MeterPattern(numerator: 3, denominator: 4) }
-            Button("5/8") { section.meter = MeterPattern(numerator: 5, denominator: 8) }
-            Button("7/8") { section.meter = MeterPattern(numerator: 7, denominator: 8) }
-            Button("12/8") { section.meter = MeterPattern(numerator: 12, denominator: 8) }
+            Button("4/4") { setMeter(numerator: 4, denominator: 4) }
+            Button("3/4") { setMeter(numerator: 3, denominator: 4) }
+            Button("5/8") { setMeter(numerator: 5, denominator: 8) }
+            Button("7/8") { setMeter(numerator: 7, denominator: 8) }
+            Button("12/8") { setMeter(numerator: 12, denominator: 8) }
         }
         .frame(maxWidth: .infinity)
         .buttonStyle(.bordered)
+    }
+
+    private func setMeter(numerator: Int, denominator: Int) {
+        section.meter = MeterPattern(numerator: numerator, denominator: denominator)
+        normalizeReferenceNote()
+    }
+
+    private func normalizeReferenceNote() {
+        let options = noteOptions(for: section.meter.denominator, from: noteValueOptions)
+        if !options.contains(where: { abs($0.multiplier - section.referenceNoteMultiplier) < 0.001 }) {
+            section.referenceNoteMultiplier = 4.0 / Double(section.meter.denominator)
+        }
     }
 }
 
@@ -900,10 +913,10 @@ private struct MeterFullEditor: View {
             .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             HStack {
-                Button("4/4") { section.meter = MeterPattern(numerator: 4, denominator: 4) }
-                Button("7/8") { section.meter = MeterPattern(numerator: 7, denominator: 8) }
-                Button("5/8") { section.meter = MeterPattern(numerator: 5, denominator: 8) }
-                Button("12/8") { section.meter = MeterPattern(numerator: 12, denominator: 8) }
+                Button("4/4") { setMeter(numerator: 4, denominator: 4) }
+                Button("7/8") { setMeter(numerator: 7, denominator: 8) }
+                Button("5/8") { setMeter(numerator: 5, denominator: 8) }
+                Button("12/8") { setMeter(numerator: 12, denominator: 8) }
             }
             .buttonStyle(.bordered)
         }
@@ -920,10 +933,14 @@ private struct MeterFullEditor: View {
         Binding(
             get: { section.meter.denominator },
             set: {
-                section.meter = MeterPattern(id: section.meter.id, numerator: section.meter.numerator, denominator: $0)
-                normalizeReferenceNote()
+                setMeter(numerator: section.meter.numerator, denominator: $0)
             }
         )
+    }
+
+    private func setMeter(numerator: Int, denominator: Int) {
+        section.meter = MeterPattern(id: section.meter.id, numerator: numerator, denominator: denominator)
+        normalizeReferenceNote()
     }
 
     private func normalizeReferenceNote() {
