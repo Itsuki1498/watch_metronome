@@ -129,6 +129,15 @@ private struct CompositeEditor: View {
                         Toggle("Loop Composite", isOn: loopBinding)
                             .padding(14)
                             .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                        Button {
+                            viewModel.queueProgram(viewModel.program)
+                        } label: {
+                            Label("Arm Composite Next Bar", systemImage: "forward.end.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.orange)
                     }
                     .padding(.horizontal, 18)
                     .padding(.top, 18)
@@ -399,7 +408,7 @@ private struct PlayDashboard: View {
                 Menu {
                     ForEach(viewModel.noteValueOptions.indices, id: \.self) { index in
                         Button {
-                            viewModel.noteValueIndex = index
+                            viewModel.selectNoteValue(at: index)
                         } label: {
                             Label(viewModel.noteValueOptions[index].name, image: viewModel.noteValueOptions[index].imageName)
                         }

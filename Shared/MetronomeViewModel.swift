@@ -115,8 +115,7 @@ final class MetronomeViewModel: ObservableObject {
             if index >= 0 && index < validNoteValueOptions.count {
                 let selectedNote = validNoteValueOptions[index]
                 if let masterIndex = noteValueOptions.firstIndex(where: { $0.multiplier == selectedNote.multiplier }) {
-                    noteValueIndex = masterIndex
-                    updateFirstProgramSectionFromEngine()
+                    selectNoteValue(at: masterIndex)
                 }
             }
         }
@@ -370,6 +369,12 @@ final class MetronomeViewModel: ObservableObject {
         updateFirstProgramSectionFromEngine()
     }
 
+    func selectNoteValue(at index: Int) {
+        guard noteValueOptions.indices.contains(index) else { return }
+        noteValueIndex = index
+        updateFirstProgramSectionFromEngine()
+    }
+
     func togglePlayback(sync: Bool = true) {
         objectWillChange.send()
         if engine.isPlaying {
@@ -504,10 +509,19 @@ final class MetronomeViewModel: ObservableObject {
 
     func saveCurrentProgramAsPreset(name: String, kind: PresetProfileKind) {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let profileName = trimmedName.isEmpty ? program.name : trimmedName
+        let profileProgram: MetronomeProgram
+        switch kind {
+        case .basic:
+            let section = program.sections.first ?? ProgramSection()
+            profileProgram = MetronomeProgram(name: profileName, sections: [section], loops: true)
+        case .composite:
+            profileProgram = MetronomeProgram(name: profileName, sections: program.sections, loops: program.loops)
+        }
         let profile = PresetProfile(
-            name: trimmedName.isEmpty ? program.name : trimmedName,
+            name: profileName,
             kind: kind,
-            program: program
+            program: profileProgram
         )
         presetProfiles.append(profile)
         persistPresetProfiles()
@@ -519,7 +533,11 @@ final class MetronomeViewModel: ObservableObject {
     }
 
     func applyPresetProfile(_ profile: PresetProfile) {
-        applyProgram(profile.program)
+        if profile.kind == .basic, let section = profile.program.sections.first {
+            applyProgram(MetronomeProgram(name: profile.name, sections: [section], loops: profile.program.loops))
+        } else {
+            applyProgram(profile.program)
+        }
     }
 
     func queuePresetProfile(_ profile: PresetProfile) {
