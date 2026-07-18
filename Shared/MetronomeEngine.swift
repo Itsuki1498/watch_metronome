@@ -114,6 +114,8 @@ final class MetronomeEngine {
             tickCount = 0
         } else {
             activeSectionIndex = min(activeSectionIndex, max(0, program.sections.count - 1))
+            let activeSection = program.sections[activeSectionIndex]
+            activeBarIndex = min(activeBarIndex, max(0, activeSection.bars - 1))
         }
         applySection(program.sections[activeSectionIndex])
     }

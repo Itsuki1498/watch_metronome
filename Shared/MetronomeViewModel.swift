@@ -404,8 +404,14 @@ final class MetronomeViewModel: ObservableObject {
     func applyProgram(_ newProgram: MetronomeProgram, sync: Bool = true, resetPosition: Bool = true) {
         objectWillChange.send()
         program = newProgram
-        currentSectionIndex = 0
-        currentBarIndex = 0
+        if resetPosition {
+            currentSectionIndex = 0
+            currentBarIndex = 0
+        } else {
+            currentSectionIndex = min(currentSectionIndex, max(0, program.sections.count - 1))
+            let activeSection = program.sections[currentSectionIndex]
+            currentBarIndex = min(currentBarIndex, max(0, activeSection.bars - 1))
+        }
         engine.applyProgram(newProgram, resetPosition: resetPosition)
         if let first = newProgram.sections.first {
             syncEditableState(from: first)
@@ -419,7 +425,7 @@ final class MetronomeViewModel: ObservableObject {
         guard let index = program.sections.firstIndex(where: { $0.id == section.id }) else { return }
         var nextProgram = program
         nextProgram.sections[index] = section
-        applyProgram(nextProgram)
+        applyProgram(nextProgram, resetPosition: false)
     }
 
     func addSection(after sectionID: UUID? = nil) {
@@ -440,14 +446,14 @@ final class MetronomeViewModel: ObservableObject {
         } else {
             nextProgram.sections.append(next)
         }
-        applyProgram(nextProgram)
+        applyProgram(nextProgram, resetPosition: false)
     }
 
     func removeSection(_ section: ProgramSection) {
         guard program.sections.count > 1 else { return }
         var nextProgram = program
         nextProgram.sections.removeAll { $0.id == section.id }
-        applyProgram(nextProgram)
+        applyProgram(nextProgram, resetPosition: false)
     }
 
     func queueChange(section: ProgramSection, loops: Bool = true) {
