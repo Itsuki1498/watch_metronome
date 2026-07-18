@@ -168,13 +168,14 @@ struct MetronomeEngineTests {
         }
 
         engine.start()
-        try await Task.sleep(nanoseconds: 180_000_000)
+        try await Task.sleep(nanoseconds: 280_000_000)
         engine.stop()
 
         let positions = recordingQueue.sync {
             recordedPositions
         }
 
+        #expect(positions.count >= 3)
         #expect(positions.prefix(3).map { $0.0 } == [0, 1, 0])
         #expect(positions.prefix(3).map { $0.1 } == [1, 0, 0])
         #expect(positions.prefix(3).map { $0.2 } == ["A", "B", "A"])
