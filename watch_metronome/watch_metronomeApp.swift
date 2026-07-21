@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-@available(iOS 16.7, *)
+@available(iOS 26.0, *)
 @main
 struct watch_metronomeApp: App {
     var body: some Scene {

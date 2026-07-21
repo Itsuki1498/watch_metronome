@@ -2,7 +2,7 @@
 
 **High-Precision Timing Engine & Modern Canvas Interface for iOS & watchOS**
 
-[![Platform](https://img.shields.io/badge/platform-watchOS%2010.6%2B%20%7C%20iOS%2016.7%2B-black.svg)](https://developer.apple.com/apple-watch/)
+[![Platform](https://img.shields.io/badge/platform-watchOS%2010.0%2B%20%7C%20iOS%2026.0%2B-black.svg)](https://developer.apple.com/apple-watch/)
 [![Swift](https://img.shields.io/badge/Swift-5.10%2B-orange.svg)](https://swift.org)
 
 ## 概要
@@ -24,9 +24,9 @@
 
 ## システム要件
 
-- **Apple Watch**: watchOS 10.6 以上
-- **iPhone**: iOS 16.7 以上 (iPhone 8, X 以降をフルサポート)
-- **IDE**: Xcode 15.4 / 16.0 以降
+- **Apple Watch**: watchOS 10.0 以上
+- **iPhone**: iOS 26.0 以上
+- **IDE**: Xcode 26 以降
 
 ## セットアップとビルド
 

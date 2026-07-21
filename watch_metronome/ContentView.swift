@@ -5,7 +5,7 @@
 
 import SwiftUI
 
-@available(iOS 16.7, *)
+@available(iOS 26.0, *)
 struct ContentView: View {
     @StateObject private var viewModel = MetronomeViewModel()
     @State private var selectedTab = 1 // Main (PlayDashboard) is center
@@ -43,7 +43,7 @@ struct ContentView: View {
     }
 }
 
-@available(iOS 16.7, *)
+@available(iOS 26.0, *)
 private struct ScreenIndexBar: View {
     @Binding var selectedTab: Int
 
@@ -85,7 +85,7 @@ private struct ScreenIndexBar: View {
     }
 }
 
-@available(iOS 16.7, *)
+@available(iOS 26.0, *)
 private struct CompositeEditor: View {
     @ObservedObject var viewModel: MetronomeViewModel
 
@@ -167,7 +167,7 @@ private struct CompositeEditor: View {
     }
 }
 
-@available(iOS 16.7, *)
+@available(iOS 26.0, *)
 private struct SectionHeader: View {
     let title: String
     var body: some View {
@@ -178,7 +178,7 @@ private struct SectionHeader: View {
     }
 }
 
-@available(iOS 16.7, *)
+@available(iOS 26.0, *)
 private struct MeterModuleCard: View {
     @ObservedObject var viewModel: MetronomeViewModel
     @Binding var section: ProgramSection
@@ -335,7 +335,7 @@ private struct PresetLibrary: View {
     }
 }
 
-@available(iOS 16.7, *)
+@available(iOS 26.0, *)
 private struct PlayDashboard: View {
     @ObservedObject var viewModel: MetronomeViewModel
     @Binding var queuedDraft: ProgramSection
@@ -629,7 +629,7 @@ private struct PlayDashboard: View {
     }
 }
 
-@available(iOS 16.7, *)
+@available(iOS 26.0, *)
 private struct BasicMeterRoller: View {
     @ObservedObject var viewModel: MetronomeViewModel
 
@@ -675,7 +675,7 @@ private struct BasicMeterRoller: View {
     }
 }
 
-@available(iOS 16.7, *)
+@available(iOS 26.0, *)
 private struct QueueDetailEditor: View {
     @ObservedObject var viewModel: MetronomeViewModel
     @Binding var section: ProgramSection
@@ -768,7 +768,7 @@ private struct QueueDetailEditor: View {
     }
 }
 
-@available(iOS 16.7, *)
+@available(iOS 26.0, *)
 private struct SectionRhythmModePicker: View {
     @Binding var section: ProgramSection
 
@@ -792,7 +792,7 @@ private struct SectionRhythmModePicker: View {
     }
 }
 
-@available(iOS 16.7, *)
+@available(iOS 26.0, *)
 private struct SectionAccentEditor: View {
     @Binding var section: ProgramSection
 
@@ -871,7 +871,7 @@ private struct MeterDraftEditor: View {
     }
 }
 
-@available(iOS 16.7, *)
+@available(iOS 26.0, *)
 private struct MeterFullEditor: View {
     @Binding var section: ProgramSection
     let noteValueOptions: [NoteValue]
@@ -960,7 +960,7 @@ private func noteOptions(for denominator: Int, from options: [NoteValue]) -> [No
     }
 }
 
-@available(iOS 16.7, *)
+@available(iOS 26.0, *)
 private struct TempoAutomationEditor: View {
     @Binding var automation: TempoAutomation
     let startBpm: Int
@@ -990,10 +990,10 @@ private struct TempoAutomationEditor: View {
         .onAppear {
             normalizeTarget()
         }
-        .onChange(of: automation.shape) { _ in
+        .onChange(of: automation.shape) {
             normalizeTarget()
         }
-        .onChange(of: startBpm) { _ in
+        .onChange(of: startBpm) {
             normalizeTarget()
         }
     }
@@ -1022,7 +1022,7 @@ private struct TempoAutomationEditor: View {
     }
 }
 
-@available(iOS 16.7, *)
+@available(iOS 26.0, *)
 private struct NumberField: View {
     let title: String
     @Binding var value: Int
@@ -1048,7 +1048,7 @@ private struct NumberField: View {
     }
 }
 
-@available(iOS 16.7, *)
+@available(iOS 26.0, *)
 private struct ControlButton: View {
     let icon: String
     let title: String
@@ -1067,7 +1067,7 @@ private struct ControlButton: View {
     }
 }
 
-@available(iOS 16.7, *)
+@available(iOS 26.0, *)
 private struct ModernPieIndicatorView: View {
     let viewModel: MetronomeViewModel
     let date: Date
@@ -1134,7 +1134,7 @@ private struct ModernPieIndicatorView: View {
     }
 }
 
-@available(iOS 16.7, *)
+@available(iOS 26.0, *)
 private struct BpmDirectInput: View {
     @Binding var bpm: Int
     @Environment(\.dismiss) var dismiss

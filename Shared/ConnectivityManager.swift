@@ -8,7 +8,7 @@
 import WatchConnectivity
 import Combine
 
-@available(iOS 16.7, watchOS 10.6, *)
+@available(iOS 26.0, watchOS 10.0, *)
 final class ConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
     static let shared = ConnectivityManager()
     

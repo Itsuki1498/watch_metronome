@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-@available(watchOS 10.6, *)
+@available(watchOS 10.0, *)
 @main
 struct watch_metronome_Watch_AppApp: App {
     var body: some Scene {
