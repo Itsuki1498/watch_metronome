@@ -22,6 +22,7 @@ final class ConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
     @Published var remoteDenominator: Int?
     @Published var remoteProgram: MetronomeProgram?
     @Published var remoteQueuedChange: QueuedMetronomeChange?
+    @Published private(set) var remoteQueuedChangeChangeID: UUID?
     @Published var remoteTransportCommand: String?
     
     override init() {
@@ -112,9 +113,11 @@ final class ConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
             if let data = userInfo["queuedChange"] as? Data,
                let change = try? JSONDecoder().decode(QueuedMetronomeChange.self, from: data) {
                 self.remoteQueuedChange = change
+                self.remoteQueuedChangeChangeID = UUID()
             }
             if userInfo["clearQueuedChange"] as? Bool == true {
                 self.remoteQueuedChange = nil
+                self.remoteQueuedChangeChangeID = UUID()
             }
             if let command = userInfo["transport"] as? String {
                 self.remoteTransportCommand = command

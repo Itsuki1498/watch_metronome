@@ -275,6 +275,21 @@ struct MetronomeEngineTests {
         #expect(decoded.sections.count == 1)
     }
 
+    @Test("以前の小節予約形式は既定の終端動作で読み込まれる")
+    func testLegacyQueuedChangeDecodesWithoutEndBehavior() throws {
+        let encoded = try JSONEncoder().encode(QueuedMetronomeChange(section: ProgramSection()))
+        var object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: "endBehavior")
+
+        let decoded = try JSONDecoder().decode(
+            QueuedMetronomeChange.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+
+        #expect(decoded.endBehavior == .stop)
+        #expect(decoded.section.bpm == 120)
+    }
+
     @Test("ループしないプログラムは最後の小節で停止する")
     func testNonLoopingProgramStopsAtEnd() async throws {
         let engine = MetronomeEngine()

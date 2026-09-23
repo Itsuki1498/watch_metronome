@@ -35,6 +35,8 @@ final class MetronomeViewModel: ObservableObject {
     @Published var currentSectionIndex: Int = 0
     @Published var currentBarIndex: Int = 0
     @Published var presetProfiles: [PresetProfile] = []
+    private let programStorageKey = "metronomeActiveProgram.v1"
+    private let queuedChangeStorageKey = "metronomeQueuedChange.v1"
     private let presetStorageKey = "metronomePresetProfiles.v1"
 
     enum EditTarget: Hashable {
@@ -218,9 +220,27 @@ final class MetronomeViewModel: ObservableObject {
     // MARK: - Initialization
 
     init() {
+#if os(iOS)
+        let fallbackProgram = MetronomeProgram.iPhoneStarterProgram
+#else
+        let fallbackProgram = MetronomeProgram.defaultProgram
+#endif
+        if let data = UserDefaults.standard.data(forKey: programStorageKey),
+           let restoredProgram = try? JSONDecoder().decode(MetronomeProgram.self, from: data) {
+            program = restoredProgram
+        } else {
+            program = fallbackProgram
+        }
+        if let data = UserDefaults.standard.data(forKey: queuedChangeStorageKey) {
+            queuedChange = try? JSONDecoder().decode(QueuedMetronomeChange.self, from: data)
+        }
         refreshValidNoteValues()
         loadPresetProfiles()
         engine.applyProgram(program)
+        if let section = program.sections.first {
+            syncEditableState(from: section)
+        }
+        engine.queueChangeForNextMeasure(queuedChange)
         setupEngine()
         setupConnectivity()
         isSystemReady = true
@@ -230,13 +250,17 @@ final class MetronomeViewModel: ObservableObject {
         engine.onMeasureStart = { [weak self] sectionIndex, barIndex, section, activeProgram in
             DispatchQueue.main.async {
                 guard let self else { return }
-                self.program = activeProgram
+                if self.program != activeProgram {
+                    self.program = activeProgram
+                    self.persistActiveProgram()
+                }
                 self.currentSectionIndex = sectionIndex
                 self.currentBarIndex = barIndex
                 self.refreshValidNoteValues()
                 self.syncNoteValue(to: section.referenceNoteMultiplier)
                 if self.queuedChange != nil && sectionIndex == 0 && barIndex == 0 {
                     self.queuedChange = nil
+                    self.persistQueuedChange()
                 }
             }
         }
@@ -360,11 +384,15 @@ final class MetronomeViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        ConnectivityManager.shared.$remoteQueuedChange
+        let connectivity = ConnectivityManager.shared
+        connectivity.$remoteQueuedChangeChangeID
+            .compactMap { $0 }
+            .map { _ in connectivity.remoteQueuedChange }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] change in
                 self?.queuedChange = change
                 self?.engine.queueChangeForNextMeasure(change)
+                self?.persistQueuedChange()
             }
             .store(in: &cancellables)
 
@@ -436,6 +464,7 @@ final class MetronomeViewModel: ObservableObject {
     func applyProgram(_ newProgram: MetronomeProgram, sync: Bool = true, resetPosition: Bool = true) {
         objectWillChange.send()
         program = newProgram
+        persistActiveProgram()
         if resetPosition {
             currentSectionIndex = 0
             currentBarIndex = 0
@@ -492,6 +521,7 @@ final class MetronomeViewModel: ObservableObject {
     func queueChange(section: ProgramSection, loops: Bool = true) {
         let change = QueuedMetronomeChange(section: section, loops: loops)
         queuedChange = change
+        persistQueuedChange()
         engine.queueChangeForNextMeasure(change)
         ConnectivityManager.shared.sendQueuedChange(change)
     }
@@ -499,6 +529,7 @@ final class MetronomeViewModel: ObservableObject {
     func queueProgram(_ program: MetronomeProgram) {
         let change = QueuedMetronomeChange(program: program)
         queuedChange = change
+        persistQueuedChange()
         engine.queueChangeForNextMeasure(change)
         ConnectivityManager.shared.sendQueuedChange(change)
     }
@@ -518,12 +549,14 @@ final class MetronomeViewModel: ObservableObject {
         )
         let change = QueuedMetronomeChange(section: section, loops: false, endBehavior: .holdLastSection)
         queuedChange = change
+        persistQueuedChange()
         engine.queueChangeForNextMeasure(change)
         ConnectivityManager.shared.sendQueuedChange(change)
     }
 
     func clearQueuedChange() {
         queuedChange = nil
+        persistQueuedChange()
         engine.queueChangeForNextMeasure(nil)
         ConnectivityManager.shared.sendQueuedChange(nil)
     }
@@ -551,6 +584,7 @@ final class MetronomeViewModel: ObservableObject {
         )
         nextProgram.sections[targetIndex] = section
         program = nextProgram
+        persistActiveProgram()
         engine.replaceProgramPreservingPosition(nextProgram)
         if sync {
             syncToRemote()
@@ -619,6 +653,20 @@ final class MetronomeViewModel: ObservableObject {
     private func persistPresetProfiles() {
         guard let data = try? JSONEncoder().encode(presetProfiles) else { return }
         UserDefaults.standard.set(data, forKey: presetStorageKey)
+    }
+
+    private func persistActiveProgram() {
+        guard let data = try? JSONEncoder().encode(program) else { return }
+        UserDefaults.standard.set(data, forKey: programStorageKey)
+    }
+
+    private func persistQueuedChange() {
+        guard let queuedChange,
+              let data = try? JSONEncoder().encode(queuedChange) else {
+            UserDefaults.standard.removeObject(forKey: queuedChangeStorageKey)
+            return
+        }
+        UserDefaults.standard.set(data, forKey: queuedChangeStorageKey)
     }
 }
 

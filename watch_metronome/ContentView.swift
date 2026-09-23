@@ -35,11 +35,6 @@ struct ContentView: View {
             ScreenIndexBar(selectedTab: $selectedTab)
         }
         .preferredColorScheme(.dark)
-        .onAppear {
-            if viewModel.program.name == MetronomeProgram.defaultProgram.name {
-                viewModel.applyProgram(.iPhoneStarterProgram)
-            }
-        }
     }
 }
 

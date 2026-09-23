@@ -45,7 +45,7 @@ final class watch_metronomeUITests: XCTestCase {
     }
 
     @MainActor
-    func testBpmTapOpensDirectNumericEntry() throws {
+    func testBpmEditPersistsAfterRelaunch() throws {
         let app = XCUIApplication()
         app.launch()
 
@@ -57,9 +57,17 @@ final class watch_metronomeUITests: XCTestCase {
         let input = app.textFields["BPM"]
         XCTAssertTrue(input.waitForExistence(timeout: 3))
         XCTAssertEqual(input.value as? String, initialValue)
+        input.tap()
+        input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: initialValue?.count ?? 3) + "137")
 
         app.buttons["完了"].tap()
         XCTAssertFalse(input.waitForExistence(timeout: 1))
+        XCTAssertEqual(bpm.label, "137 BPM")
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(bpm.waitForExistence(timeout: 5))
+        XCTAssertEqual(bpm.label, "137 BPM")
     }
 
     @MainActor
