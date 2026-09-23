@@ -76,6 +76,7 @@ private struct ScreenIndexBar: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("screen-index-\(tab.0)")
             }
         }
         .padding(.horizontal, 14)
@@ -351,7 +352,7 @@ private struct PlayDashboard: View {
             ZStack {
                 Color.black.ignoresSafeArea()
 
-                TimelineView(.animation(minimumInterval: 0.016)) { context in
+                TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !viewModel.isPlaying)) { context in
                     ModernPieIndicatorView(viewModel: viewModel, date: context.date)
                         .padding(.horizontal, 18)
                         .padding(.top, 70)
@@ -386,25 +387,20 @@ private struct PlayDashboard: View {
 
     private var currentReadout: some View {
         VStack(spacing: 14) {
-            Button {
-                isBpmEditing.toggle()
-            } label: {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text("\(viewModel.bpm)")
-                        .font(.system(size: 86, weight: .black).monospacedDigit())
-                        .foregroundStyle(.white)
-                    Text("BPM")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.secondary)
-                }
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("\(viewModel.bpm)")
+                    .font(.system(size: 86, weight: .black).monospacedDigit())
+                    .foregroundStyle(.white)
+                Text("BPM")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
-            .simultaneousGesture(
+            .contentShape(Rectangle())
+            .onTapGesture { isBpmEditing = true }
+            .gesture(
                 DragGesture(minimumDistance: 8)
                     .onChanged { value in
-                        if bpmDragStart == nil {
-                            bpmDragStart = viewModel.bpm
-                        }
+                        if bpmDragStart == nil { bpmDragStart = viewModel.bpm }
                         let delta = Int(round(-value.translation.height / 3.0))
                         viewModel.bpm = min(400, max(40, (bpmDragStart ?? viewModel.bpm) + delta))
                     }
@@ -412,6 +408,11 @@ private struct PlayDashboard: View {
                         bpmDragStart = nil
                     }
             )
+            .accessibilityElement()
+            .accessibilityLabel("\(viewModel.bpm) BPM")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier("main-bpm")
+            .accessibilityAction { isBpmEditing = true }
             .sheet(isPresented: $isBpmEditing) {
                 BpmDirectInput(bpm: bpmBinding)
                     .presentationDetents([.height(200)])

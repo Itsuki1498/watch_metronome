@@ -27,6 +27,7 @@ final class MetronomeViewModel: ObservableObject {
     private let hapticManager = HapticManager()
     private let clickSoundManager = ClickSoundManager()
     private var cancellables = Set<AnyCancellable>()
+    private var remoteSyncWorkItem: DispatchWorkItem?
 
     @Published var isSystemReady: Bool = false
     @Published var program: MetronomeProgram = .defaultProgram
@@ -382,11 +383,18 @@ final class MetronomeViewModel: ObservableObject {
     }
 
     private func syncToRemote() {
-        ConnectivityManager.shared.sendStatus(
-            bpm: engine.bpm,
-            numerator: numerator,
-            denominator: engine.denominator
-        )
+        remoteSyncWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            ConnectivityManager.shared.sendProgram(self.program)
+            ConnectivityManager.shared.sendStatus(
+                bpm: self.engine.bpm,
+                numerator: self.numerator,
+                denominator: self.engine.denominator
+            )
+        }
+        remoteSyncWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(160), execute: workItem)
     }
 
     // MARK: - Actions
@@ -411,6 +419,8 @@ final class MetronomeViewModel: ObservableObject {
             engine.stop()
             if sync { ConnectivityManager.shared.sendTransportCommand("stop") }
         } else {
+            remoteSyncWorkItem?.cancel()
+            remoteSyncWorkItem = nil
             engine.start()
             self.currentBeat = 1.0
             self.currentIntensity = .strong
@@ -440,7 +450,7 @@ final class MetronomeViewModel: ObservableObject {
             syncEditableState(from: section)
         }
         if sync {
-            ConnectivityManager.shared.sendProgram(newProgram)
+            syncToRemote()
         }
     }
 
@@ -543,7 +553,7 @@ final class MetronomeViewModel: ObservableObject {
         program = nextProgram
         engine.replaceProgramPreservingPosition(nextProgram)
         if sync {
-            ConnectivityManager.shared.sendProgram(nextProgram)
+            syncToRemote()
         }
     }
 
