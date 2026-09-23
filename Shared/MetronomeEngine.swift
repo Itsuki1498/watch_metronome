@@ -258,6 +258,7 @@ final class MetronomeEngine {
             return
         }
 
+        storedLastTickTime = tickTime
         tickCount += 1
         if tickCount > storedTotalTicksInMeasure {
             tickCount = 1
@@ -269,7 +270,6 @@ final class MetronomeEngine {
         }
 
         let currentTick = tickCount
-        storedLastTickTime = tickTime
 
         let outerStep = storedTicksPerOuterBeat
         let refStep = storedTicksPerRefNote

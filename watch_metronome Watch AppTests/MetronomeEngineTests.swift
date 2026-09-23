@@ -146,6 +146,38 @@ struct MetronomeEngineTests {
         #expect(Array(bpms.prefix(3)) == [300, 200, 100])
     }
 
+    @Test("小節頭でテンポを落としても次の拍間隔を維持する")
+    func testSlowerSectionUsesItsFullFirstBeatInterval() async throws {
+        let engine = MetronomeEngine()
+        engine.applyProgram(
+            MetronomeProgram(
+                name: "Tempo Boundary",
+                sections: [
+                    ProgramSection(name: "Fast", meter: MeterPattern(numerator: 1, denominator: 32), bpm: 400),
+                    ProgramSection(name: "Slow", meter: MeterPattern(numerator: 1, denominator: 32), bpm: 100)
+                ],
+                loops: true
+            )
+        )
+
+        var tickTimes: [UInt64] = []
+        let recordingQueue = DispatchQueue(label: "metronome.test.tempoBoundary")
+        engine.onTick = { _, _, tickTime in
+            recordingQueue.sync {
+                tickTimes.append(tickTime.uptimeNanoseconds)
+            }
+        }
+
+        engine.start()
+        try await Task.sleep(nanoseconds: 280_000_000)
+        engine.stop()
+
+        let times = recordingQueue.sync { tickTimes }
+        #expect(times.count >= 3)
+        let firstSlowInterval = Double(times[2] - times[1]) / 1_000_000_000
+        #expect(firstSlowInterval > 0.06)
+    }
+
     @Test("複合拍子プログラムがセクションの小節数通りに進むかテスト")
     func testCompositeProgramAdvancesBySectionBars() async throws {
         let engine = MetronomeEngine()
