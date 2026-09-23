@@ -201,11 +201,17 @@ final class MetronomeViewModel: ObservableObject {
                 intervals.append(tapTimes[i].timeIntervalSince(tapTimes[i-1]))
             }
             let averageInterval = intervals.reduce(0, +) / Double(intervals.count)
-            let calculatedBpm = Int(round(60.0 / averageInterval))
-            self.bpm = calculatedBpm
+            if averageInterval.isFinite, averageInterval > 0 {
+                let calculatedBpm = Int(min(400, max(40, (60.0 / averageInterval).rounded())))
+                self.bpm = calculatedBpm
+            }
         }
 
-        hapticManager.playWeak() // タップ時の手応え
+        #if os(watchOS)
+        hapticManager.playWeak()
+        #else
+        clickSoundManager.play(.weak)
+        #endif
     }
 
     // MARK: - Initialization
@@ -216,15 +222,14 @@ final class MetronomeViewModel: ObservableObject {
         engine.applyProgram(program)
         setupEngine()
         setupConnectivity()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            self.isSystemReady = true
-        }
+        isSystemReady = true
     }
 
     private func setupEngine() {
-        engine.onMeasureStart = { [weak self] sectionIndex, barIndex, section in
+        engine.onMeasureStart = { [weak self] sectionIndex, barIndex, section, activeProgram in
             DispatchQueue.main.async {
                 guard let self else { return }
+                self.program = activeProgram
                 self.currentSectionIndex = sectionIndex
                 self.currentBarIndex = barIndex
                 self.refreshValidNoteValues()
@@ -232,6 +237,15 @@ final class MetronomeViewModel: ObservableObject {
                 if self.queuedChange != nil && sectionIndex == 0 && barIndex == 0 {
                     self.queuedChange = nil
                 }
+            }
+        }
+        engine.onPlaybackEnd = { [weak self] in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.objectWillChange.send()
+                #if os(iOS)
+                ConnectivityManager.shared.sendTransportCommand("stop")
+                #endif
             }
         }
         engine.onTick = { [weak self] (beat: Double, intensity: BeatIntensity, tickTime: DispatchTime) in
@@ -340,7 +354,8 @@ final class MetronomeViewModel: ObservableObject {
             .compactMap { $0 }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] program in
-                self?.applyProgram(program, sync: false, resetPosition: true)
+                guard let self else { return }
+                self.applyProgram(program, sync: false, resetPosition: !self.engine.isPlaying)
             }
             .store(in: &cancellables)
 
@@ -440,7 +455,7 @@ final class MetronomeViewModel: ObservableObject {
         var nextProgram = program
         let template = nextProgram.sections.last ?? ProgramSection(name: "Section")
         let next = ProgramSection(
-            name: "Section \(nextProgram.sections.count + 1)",
+            name: "拍子 \(nextProgram.sections.count + 1)",
             meter: template.meter,
             bpm: template.bpm,
             bars: template.bars,
@@ -491,7 +506,10 @@ final class MetronomeViewModel: ObservableObject {
             tempoAutomation: TempoAutomation(shape: shape, targetBpm: targetBpm, lengthInBars: max(1, bars)),
             accents: current.accents
         )
-        queueChange(section: section, loops: false)
+        let change = QueuedMetronomeChange(section: section, loops: false, endBehavior: .holdLastSection)
+        queuedChange = change
+        engine.queueChangeForNextMeasure(change)
+        ConnectivityManager.shared.sendQueuedChange(change)
     }
 
     func clearQueuedChange() {
@@ -523,6 +541,7 @@ final class MetronomeViewModel: ObservableObject {
         )
         nextProgram.sections[targetIndex] = section
         program = nextProgram
+        engine.replaceProgramPreservingPosition(nextProgram)
         if sync {
             ConnectivityManager.shared.sendProgram(nextProgram)
         }
@@ -534,10 +553,16 @@ final class MetronomeViewModel: ObservableObject {
         let profileProgram: MetronomeProgram
         switch kind {
         case .basic:
-            let section = program.sections.first ?? ProgramSection()
+            let activeIndex = min(currentSectionIndex, max(0, program.sections.count - 1))
+            let section = program.sections[safe: activeIndex] ?? ProgramSection()
             profileProgram = MetronomeProgram(name: profileName, sections: [section], loops: true)
         case .composite:
-            profileProgram = MetronomeProgram(name: profileName, sections: program.sections, loops: program.loops)
+            profileProgram = MetronomeProgram(
+                name: profileName,
+                sections: program.sections,
+                loops: program.loops,
+                endBehavior: program.endBehavior
+            )
         }
         let profile = PresetProfile(
             name: profileName,
@@ -575,7 +600,7 @@ final class MetronomeViewModel: ObservableObject {
             presetProfiles = decoded
         } else {
             presetProfiles = [
-                PresetProfile(name: "Basic 4/4", kind: .basic, program: .defaultProgram),
+                PresetProfile(name: "基本 4/4", kind: .basic, program: .defaultProgram),
                 PresetProfile(name: "4/4 + 7/8", kind: .composite, program: .iPhoneStarterProgram)
             ]
         }

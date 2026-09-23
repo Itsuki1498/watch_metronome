@@ -129,7 +129,7 @@ struct MetronomeEngineTests {
 
         var recordedBpms: [Int] = []
         let recordingQueue = DispatchQueue(label: "metronome.test.tempoAutomation")
-        engine.onMeasureStart = { _, _, _ in
+        engine.onMeasureStart = { _, _, _, _ in
             recordingQueue.sync {
                 recordedBpms.append(engine.bpm)
             }
@@ -161,7 +161,7 @@ struct MetronomeEngineTests {
 
         var recordedPositions: [(Int, Int, String)] = []
         let recordingQueue = DispatchQueue(label: "metronome.test.compositeAdvance")
-        engine.onMeasureStart = { sectionIndex, barIndex, section in
+        engine.onMeasureStart = { sectionIndex, barIndex, section, _ in
             recordingQueue.sync {
                 recordedPositions.append((sectionIndex, barIndex, section.name))
             }
@@ -204,11 +204,13 @@ struct MetronomeEngineTests {
         )
 
         var firstAppliedSection: ProgramSection?
+        var appliedProgramName: String?
         let recordingQueue = DispatchQueue(label: "metronome.test.queuedProgram")
-        engine.onMeasureStart = { _, _, section in
+        engine.onMeasureStart = { _, _, section, program in
             recordingQueue.sync {
                 if firstAppliedSection == nil {
                     firstAppliedSection = section
+                    appliedProgramName = program.name
                 }
             }
         }
@@ -218,12 +220,78 @@ struct MetronomeEngineTests {
         try await Task.sleep(nanoseconds: 220_000_000)
         engine.stop()
 
-        let appliedSection = recordingQueue.sync {
-            firstAppliedSection
+        let appliedState = recordingQueue.sync {
+            (firstAppliedSection, appliedProgramName)
         }
 
-        #expect(appliedSection?.name == "QueuedA")
-        #expect(appliedSection?.meter.displayName == "3/32")
+        #expect(appliedState.0?.name == "QueuedA")
+        #expect(appliedState.0?.meter.displayName == "3/32")
+        #expect(appliedState.1 == "Queued")
         #expect(engine.bpm == 320)
+    }
+
+    @Test("以前のプリセット形式は既定の終端動作で読み込まれる")
+    func testLegacyProgramDecodesWithoutEndBehavior() throws {
+        let encoded = try JSONEncoder().encode(MetronomeProgram.defaultProgram)
+        var object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: "endBehavior")
+        let legacyData = try JSONSerialization.data(withJSONObject: object)
+
+        let decoded = try JSONDecoder().decode(MetronomeProgram.self, from: legacyData)
+
+        #expect(decoded.endBehavior == .stop)
+        #expect(decoded.sections.count == 1)
+    }
+
+    @Test("ループしないプログラムは最後の小節で停止する")
+    func testNonLoopingProgramStopsAtEnd() async throws {
+        let engine = MetronomeEngine()
+        engine.applyProgram(
+            MetronomeProgram(
+                name: "One Shot",
+                sections: [
+                    ProgramSection(name: "A", meter: MeterPattern(numerator: 1, denominator: 32), bpm: 400, bars: 2)
+                ],
+                loops: false
+            )
+        )
+
+        engine.start()
+        try await Task.sleep(nanoseconds: 350_000_000)
+
+        #expect(!engine.isPlaying)
+
+        engine.start()
+        try await Task.sleep(nanoseconds: 50_000_000)
+        #expect(engine.isPlaying)
+        engine.stop()
+    }
+
+    @Test("テンポ変化の完了後は目標テンポを維持する")
+    func testTempoAutomationHoldsTargetAfterFinishing() async throws {
+        let engine = MetronomeEngine()
+        engine.applyProgram(
+            MetronomeProgram(
+                name: "Tempo Hold",
+                sections: [
+                    ProgramSection(
+                        name: "rit.",
+                        meter: MeterPattern(numerator: 1, denominator: 32),
+                        bpm: 400,
+                        bars: 2,
+                        tempoAutomation: TempoAutomation(shape: .ritardando, targetBpm: 100, lengthInBars: 2)
+                    )
+                ],
+                loops: false,
+                endBehavior: .holdLastSection
+            )
+        )
+
+        engine.start()
+        try await Task.sleep(nanoseconds: 350_000_000)
+
+        #expect(engine.isPlaying)
+        #expect(engine.bpm == 100)
+        engine.stop()
     }
 }

@@ -28,63 +28,110 @@ final class MetronomeEngine {
 
     // MARK: - Properties
 
-    var bpm: Int = 120 {
-        didSet { updateConstants() }
-    }
+    private let lock = NSRecursiveLock()
+    private var storedBpm = 120
+    private var storedBeatPattern = [4]
+    private var storedDenominator = 4
+    private var storedReferenceNoteMultiplier = 1.0
+    private var storedAccents: [Bool]?
+    private var storedRhythmMode: RhythmMode = .all
+    private var storedIsPlaying = false
+    private var storedLastTickTime: DispatchTime = .now()
+    private var storedProgram = MetronomeProgram.defaultProgram
+    private var storedInternalInterval = 0.5
+    private var storedTotalTicksInMeasure = 4
+    private var storedTicksPerOuterBeat = 1
+    private var storedTicksPerRefNote = 1
 
-    var numerator: Int = 4 {
-        didSet {
-            numerator = max(1, numerator)
-            // 外部から分子が変えられたら、単一の拍グループとしてパターンをリセット
-            beatPattern = [numerator]
-            updateConstants()
+    var bpm: Int {
+        get { lock.withLock { storedBpm } }
+        set {
+            lock.withLock {
+                storedBpm = max(1, newValue)
+                updateConstants()
+            }
         }
     }
 
-    var denominator: Int = 4 {
-        didSet { updateConstants() }
+    var numerator: Int {
+        get { lock.withLock { max(1, storedBeatPattern.reduce(0, +)) } }
+        set {
+            lock.withLock {
+                storedBeatPattern = [max(1, newValue)]
+                updateConstants()
+            }
+        }
+    }
+
+    var denominator: Int {
+        get { lock.withLock { storedDenominator } }
+        set {
+            lock.withLock {
+                storedDenominator = max(1, newValue)
+                updateConstants()
+            }
+        }
     }
 
     /// 現在小節の分子。互換性のため配列のまま保持するが、iPhone 側の複合拍子は小節モジュール列で表現する。
-    var beatPattern: [Int] = [4] {
-        didSet {
-            beatPattern = beatPattern.isEmpty ? [1] : beatPattern.map { max(1, $0) }
-            updateConstants()
+    var beatPattern: [Int] {
+        get { lock.withLock { storedBeatPattern } }
+        set {
+            lock.withLock {
+                storedBeatPattern = newValue.isEmpty ? [1] : newValue.map { max(1, $0) }
+                updateConstants()
+            }
         }
     }
 
-    var referenceNoteMultiplier: Double = 1.0 {
-        didSet { updateConstants() }
+    var referenceNoteMultiplier: Double {
+        get { lock.withLock { storedReferenceNoteMultiplier } }
+        set {
+            lock.withLock {
+                storedReferenceNoteMultiplier = max(0.125, newValue)
+                updateConstants()
+            }
+        }
     }
 
-    var accents: [Bool]? = nil {
-        didSet { updateConstants() }
+    var accents: [Bool]? {
+        get { lock.withLock { storedAccents } }
+        set {
+            lock.withLock {
+                storedAccents = newValue
+                updateConstants()
+            }
+        }
     }
 
-    var rhythmMode: RhythmMode = .all
+    var rhythmMode: RhythmMode {
+        get { lock.withLock { storedRhythmMode } }
+        set { lock.withLock { storedRhythmMode = newValue } }
+    }
 
-    private(set) var isPlaying: Bool = false
+    var isPlaying: Bool { lock.withLock { storedIsPlaying } }
     private var tickCount: Int = 0
-    private(set) var lastTickTime: DispatchTime = .now()
+    var lastTickTime: DispatchTime { lock.withLock { storedLastTickTime } }
 
     private var timer: DispatchSourceTimer?
     private let queue = DispatchQueue(label: "com.watchmetronome.engine", qos: .userInteractive)
-    private let lock = NSRecursiveLock()
 
     var onTick: ((_ beat: Double, _ intensity: BeatIntensity, _ tickTime: DispatchTime) -> Void)?
-    var onMeasureStart: ((_ sectionIndex: Int, _ barIndex: Int, _ section: ProgramSection) -> Void)?
+    var onMeasureStart: ((_ sectionIndex: Int, _ barIndex: Int, _ section: ProgramSection, _ program: MetronomeProgram) -> Void)?
+    var onPlaybackEnd: (() -> Void)?
 
-    private(set) var program: MetronomeProgram = .defaultProgram
+    var program: MetronomeProgram { lock.withLock { storedProgram } }
     private var activeSectionIndex: Int = 0
     private var activeBarIndex: Int = 0
     private var queuedChange: QueuedMetronomeChange?
+    private var reachedProgramEnd = false
 
     // MARK: - Logic Constants
 
-    private(set) var internalInterval: Double = 0.5
-    private(set) var totalTicksInMeasure: Int = 4
-    private(set) var ticksPerOuterBeat: Int = 1
-    private(set) var ticksPerRefNote: Int = 1
+    var internalInterval: Double { lock.withLock { storedInternalInterval } }
+    var totalTicksInMeasure: Int { lock.withLock { storedTotalTicksInMeasure } }
+    var ticksPerOuterBeat: Int { lock.withLock { storedTicksPerOuterBeat } }
+    var ticksPerRefNote: Int { lock.withLock { storedTicksPerRefNote } }
 
     private func updateConstants() {
         let unitDenom = 4.0 / Double(denominator)
@@ -94,11 +141,11 @@ final class MetronomeEngine {
         // パターンの合計を現在の分子とする
         let currentNumerator = max(1, beatPattern.reduce(0, +))
 
-        totalTicksInMeasure = max(1, Int(round((unitDenom * Double(currentNumerator)) / pulseUnit)))
-        ticksPerOuterBeat = max(1, Int(round(unitDenom / pulseUnit)))
-        ticksPerRefNote = max(1, Int(round(unitRef / pulseUnit)))
+        storedTotalTicksInMeasure = max(1, Int(round((unitDenom * Double(currentNumerator)) / pulseUnit)))
+        storedTicksPerOuterBeat = max(1, Int(round(unitDenom / pulseUnit)))
+        storedTicksPerRefNote = max(1, Int(round(unitRef / pulseUnit)))
 
-        internalInterval = (60.0 / Double(bpm)) / Double(ticksPerRefNote)
+        storedInternalInterval = (60.0 / Double(bpm)) / Double(storedTicksPerRefNote)
 
         if isPlaying { updateTimerSchedule(isRestart: true) }
     }
@@ -107,17 +154,29 @@ final class MetronomeEngine {
         lock.lock()
         defer { lock.unlock() }
 
-        program = newProgram.sections.isEmpty ? .defaultProgram : newProgram
+        storedProgram = newProgram.sections.isEmpty ? .defaultProgram : newProgram
         if resetPosition {
             activeSectionIndex = 0
             activeBarIndex = 0
             tickCount = 0
+            reachedProgramEnd = false
         } else {
-            activeSectionIndex = min(activeSectionIndex, max(0, program.sections.count - 1))
-            let activeSection = program.sections[activeSectionIndex]
+            activeSectionIndex = min(activeSectionIndex, max(0, storedProgram.sections.count - 1))
+            let activeSection = storedProgram.sections[activeSectionIndex]
             activeBarIndex = min(activeBarIndex, max(0, activeSection.bars - 1))
         }
-        applySection(program.sections[activeSectionIndex])
+        applySection(storedProgram.sections[activeSectionIndex])
+    }
+
+    func replaceProgramPreservingPosition(_ newProgram: MetronomeProgram) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !newProgram.sections.isEmpty else { return }
+        storedProgram = newProgram
+        reachedProgramEnd = false
+        activeSectionIndex = min(activeSectionIndex, storedProgram.sections.count - 1)
+        let section = storedProgram.sections[activeSectionIndex]
+        activeBarIndex = min(activeBarIndex, max(0, section.bars - 1))
     }
 
     func queueChangeForNextMeasure(_ change: QueuedMetronomeChange?) {
@@ -152,13 +211,18 @@ final class MetronomeEngine {
         defer { lock.unlock() }
         guard !isPlaying else { return }
 
-        isPlaying = true
+        storedIsPlaying = true
+        if reachedProgramEnd {
+            activeSectionIndex = 0
+            activeBarIndex = 0
+            reachedProgramEnd = false
+        }
         tickCount = 0
-        applySection(program.sections[activeSectionIndex])
+        applySection(storedProgram.sections[activeSectionIndex])
         updateConstants()
 
         let deadline = DispatchTime.now() + .milliseconds(100)
-        lastTickTime = deadline
+        storedLastTickTime = deadline
 
         if timer == nil {
             timer = DispatchSource.makeTimerSource(queue: queue)
@@ -168,48 +232,52 @@ final class MetronomeEngine {
             timer?.resume()
         }
 
-        timer?.schedule(deadline: deadline, repeating: internalInterval, leeway: .nanoseconds(0))
+        timer?.schedule(deadline: deadline, repeating: storedInternalInterval, leeway: .nanoseconds(0))
     }
 
     func stop() {
         lock.lock()
         defer { lock.unlock() }
-        isPlaying = false
+        storedIsPlaying = false
         timer?.cancel()
         timer = nil
     }
 
     private func updateTimerSchedule(isRestart: Bool) {
-        guard isPlaying else { return }
-        let nextTime = lastTickTime + internalInterval
+        guard storedIsPlaying else { return }
+        let nextTime = storedLastTickTime + storedInternalInterval
         let deadline = nextTime < .now() ? .now() : nextTime
-        timer?.schedule(deadline: deadline, repeating: internalInterval, leeway: .nanoseconds(0))
+        timer?.schedule(deadline: deadline, repeating: storedInternalInterval, leeway: .nanoseconds(0))
     }
 
     private func tick() {
         let tickTime = DispatchTime.now()
         lock.lock()
-        guard isPlaying else {
+        guard storedIsPlaying else {
             lock.unlock()
             return
         }
 
         tickCount += 1
-        if tickCount > totalTicksInMeasure {
+        if tickCount > storedTotalTicksInMeasure {
             tickCount = 1
-            advanceMeasureLocked()
+            guard advanceMeasureLocked() else {
+                lock.unlock()
+                onPlaybackEnd?()
+                return
+            }
         }
 
         let currentTick = tickCount
-        lastTickTime = tickTime
+        storedLastTickTime = tickTime
 
-        let outerStep = ticksPerOuterBeat
-        let refStep = ticksPerRefNote
-        let mode = rhythmMode
-        let currentAccents = accents
+        let outerStep = storedTicksPerOuterBeat
+        let refStep = storedTicksPerRefNote
+        let mode = storedRhythmMode
+        let currentAccents = storedAccents
 
-        let unitDenom = 4.0 / Double(denominator)
-        let unitRef = referenceNoteMultiplier
+        let unitDenom = 4.0 / Double(storedDenominator)
+        let unitRef = storedReferenceNoteMultiplier
         let isRefMultiple = (unitRef / unitDenom) >= 0.999 && abs((unitRef / unitDenom) - round(unitRef / unitDenom)) < 0.001
 
         lock.unlock()
@@ -260,35 +328,63 @@ final class MetronomeEngine {
         onTick?(logicalBeat, finalIntensity, tickTime)
     }
 
-    private func advanceMeasureLocked() {
+    @discardableResult
+    private func advanceMeasureLocked() -> Bool {
         if let queuedChange {
             self.queuedChange = nil
-            program = queuedChange.program ?? MetronomeProgram(name: "Queued Change", sections: [queuedChange.section], loops: queuedChange.loops)
+            storedProgram = queuedChange.program ?? MetronomeProgram(
+                name: "Queued Change",
+                sections: [queuedChange.section],
+                loops: queuedChange.loops,
+                endBehavior: queuedChange.endBehavior
+            )
+            reachedProgramEnd = false
             activeSectionIndex = 0
             activeBarIndex = 0
-            let section = program.sections[activeSectionIndex]
+            let section = storedProgram.sections[activeSectionIndex]
             applySection(section)
-            onMeasureStart?(activeSectionIndex, activeBarIndex, section)
-            return
+            onMeasureStart?(activeSectionIndex, activeBarIndex, section, storedProgram)
+            return true
         }
 
-        guard !program.sections.isEmpty else { return }
+        guard !storedProgram.sections.isEmpty else { return false }
         var nextBar = activeBarIndex + 1
         var nextSectionIndex = activeSectionIndex
-        let section = program.sections[activeSectionIndex]
+        let section = storedProgram.sections[activeSectionIndex]
 
         if nextBar >= section.bars {
-            nextBar = 0
-            nextSectionIndex += 1
-            if nextSectionIndex >= program.sections.count {
-                nextSectionIndex = program.loops ? 0 : program.sections.count - 1
+            if activeSectionIndex == storedProgram.sections.count - 1 && !storedProgram.loops {
+                if storedProgram.endBehavior == .holdLastSection {
+                    nextBar = max(0, section.bars - 1)
+                } else {
+                    storedIsPlaying = false
+                    reachedProgramEnd = true
+                    timer?.cancel()
+                    timer = nil
+                    return false
+                }
+            } else {
+                nextBar = 0
+                nextSectionIndex += 1
+                if nextSectionIndex >= storedProgram.sections.count {
+                    nextSectionIndex = 0
+                }
             }
         }
 
         activeSectionIndex = nextSectionIndex
         activeBarIndex = nextBar
-        let nextSection = program.sections[activeSectionIndex]
+        let nextSection = storedProgram.sections[activeSectionIndex]
         applySection(nextSection)
-        onMeasureStart?(activeSectionIndex, activeBarIndex, nextSection)
+        onMeasureStart?(activeSectionIndex, activeBarIndex, nextSection, storedProgram)
+        return true
+    }
+}
+
+private extension NSRecursiveLock {
+    func withLock<T>(_ body: () throws -> T) rethrows -> T {
+        lock()
+        defer { unlock() }
+        return try body()
     }
 }

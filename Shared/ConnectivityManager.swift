@@ -13,6 +13,8 @@ final class ConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
     static let shared = ConnectivityManager()
     
     var session: WCSession = .default
+    private var isSessionSupported = false
+    private var pendingPayloads: [[String: Any]] = []
     
     // 同期したいデータ
     @Published var remoteBpm: Int?
@@ -25,45 +27,62 @@ final class ConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
     override init() {
         super.init()
         if WCSession.isSupported() {
+            isSessionSupported = true
             session.delegate = self
             session.activate()
         }
     }
     
     func sendStatus(bpm: Int, numerator: Int, denominator: Int) {
-        guard session.activationState == .activated else { return }
         let data: [String: Any] = [
             "bpm": bpm,
             "numerator": numerator,
             "denominator": denominator
         ]
-        session.transferUserInfo(data)
+        send(data)
     }
 
     func sendProgram(_ program: MetronomeProgram) {
-        guard session.activationState == .activated else { return }
         guard let payload = try? JSONEncoder().encode(program) else { return }
-        session.transferUserInfo(["program": payload])
+        send(["program": payload])
     }
 
     func sendQueuedChange(_ change: QueuedMetronomeChange?) {
-        guard session.activationState == .activated else { return }
         if let change, let payload = try? JSONEncoder().encode(change) {
-            session.transferUserInfo(["queuedChange": payload])
+            send(["queuedChange": payload])
         } else {
-            session.transferUserInfo(["clearQueuedChange": true])
+            send(["clearQueuedChange": true])
         }
     }
 
     func sendTransportCommand(_ command: String) {
-        guard session.activationState == .activated else { return }
-        session.transferUserInfo(["transport": command])
+        send(["transport": command])
+    }
+
+    private func send(_ userInfo: [String: Any]) {
+        guard isSessionSupported else { return }
+        guard session.activationState == .activated else {
+            pendingPayloads.append(userInfo)
+            return
+        }
+        guard session.isReachable else {
+            session.transferUserInfo(userInfo)
+            return
+        }
+        session.sendMessage(userInfo, replyHandler: nil) { [weak self] _ in
+            self?.session.transferUserInfo(userInfo)
+        }
     }
     
     // MARK: - WCSessionDelegate
     
     func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
-        // Handle activation
+        guard activationState == .activated, error == nil else { return }
+        DispatchQueue.main.async {
+            let pending = self.pendingPayloads
+            self.pendingPayloads.removeAll()
+            pending.forEach(self.send)
+        }
     }
     
     #if os(iOS)
@@ -73,7 +92,15 @@ final class ConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
     }
     #endif
     
+    func session(_ session: WCSession, didReceiveMessage message: [String : Any]) {
+        receive(message)
+    }
+
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String : Any] = [:]) {
+        receive(userInfo)
+    }
+
+    private func receive(_ userInfo: [String: Any]) {
         DispatchQueue.main.async {
             if let bpm = userInfo["bpm"] as? Int { self.remoteBpm = bpm }
             if let num = userInfo["numerator"] as? Int { self.remoteNumerator = num }

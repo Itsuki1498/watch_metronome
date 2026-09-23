@@ -10,7 +10,7 @@ struct ContentView: View {
     @StateObject private var viewModel = MetronomeViewModel()
     @State private var selectedTab = 1 // Main (PlayDashboard) is center
     @State private var queuedDraft = ProgramSection(
-        name: "Next",
+        name: "次回設定",
         meter: MeterPattern(numerator: 4, denominator: 4),
         bpm: 120,
         bars: 1
@@ -48,9 +48,9 @@ private struct ScreenIndexBar: View {
     @Binding var selectedTab: Int
 
     private let tabs: [(Int, String, String)] = [
-        (0, "Complex", "square.stack.3d.up"),
-        (1, "Main", "metronome"),
-        (2, "Presets", "tray.full")
+        (0, "複合", "square.stack.3d.up"),
+        (1, "基本", "metronome"),
+        (2, "プリセット", "tray.full")
     ]
 
     var body: some View {
@@ -95,7 +95,7 @@ private struct CompositeEditor: View {
                 Color.black.ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        SectionHeader(title: "Composite Meter Modules")
+                        SectionHeader(title: "複合拍子")
 
                         ForEach(viewModel.program.sections) { section in
                             MeterModuleCard(
@@ -120,20 +120,20 @@ private struct CompositeEditor: View {
                         Button {
                             viewModel.addSection()
                         } label: {
-                            Label("Add Meter Module", systemImage: "plus.circle.fill")
+                            Label("拍子を追加", systemImage: "plus.circle.fill")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.cyan)
 
-                        Toggle("Loop Composite", isOn: loopBinding)
+                        Toggle("ループ再生", isOn: loopBinding)
                             .padding(14)
                             .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                         Button {
                             viewModel.queueProgram(viewModel.program)
                         } label: {
-                            Label("Arm Composite Next Bar", systemImage: "forward.end.fill")
+                            Label("次の小節から適用", systemImage: "forward.end.fill")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
@@ -144,7 +144,7 @@ private struct CompositeEditor: View {
                     .padding(.bottom, 28)
                 }
             }
-            .navigationTitle("Composite")
+            .navigationTitle("複合拍子")
         }
     }
 
@@ -161,7 +161,7 @@ private struct CompositeEditor: View {
             set: {
                 var p = viewModel.program
                 p.loops = $0
-                viewModel.applyProgram(p)
+                viewModel.applyProgram(p, resetPosition: false)
             }
         )
     }
@@ -202,7 +202,7 @@ private struct MeterModuleCard: View {
                 .disabled(!canDelete)
             }
 
-            TextField("Module name", text: $section.name)
+            TextField("拍子名", text: $section.name)
                 .textFieldStyle(.roundedBorder)
 
             MeterFullEditor(section: $section, noteValueOptions: viewModel.noteValueOptions)
@@ -210,7 +210,7 @@ private struct MeterModuleCard: View {
             HStack {
                 NumberField(title: "BPM", value: $section.bpm, range: 40...400)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Bars")
+                    Text("小節数")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Stepper(value: $section.bars, in: 1...999) {
@@ -225,7 +225,7 @@ private struct MeterModuleCard: View {
                 Text("BPM")
             }
 
-            Picker("Note", selection: noteBinding) {
+            Picker("基準音符", selection: noteBinding) {
                 ForEach(validNoteOptions.indices, id: \.self) { index in
                     Text(validNoteOptions[index].name)
                         .tag(validNoteOptions[index].multiplier)
@@ -237,7 +237,7 @@ private struct MeterModuleCard: View {
 
             SectionAccentEditor(section: $section)
 
-            DisclosureGroup("Tempo Automation") {
+            DisclosureGroup("テンポ変化") {
                 TempoAutomationEditor(automation: $section.tempoAutomation, startBpm: section.bpm)
             }
             .font(.caption)
@@ -274,11 +274,11 @@ private struct PresetLibrary: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Save Current Profile") {
-                    TextField("Preset name", text: $presetName)
-                    Picker("Type", selection: $presetKind) {
-                        Text("Basic").tag(PresetProfileKind.basic)
-                        Text("Composite").tag(PresetProfileKind.composite)
+                Section("プロファイルを保存") {
+                    TextField("プリセット名", text: $presetName)
+                    Picker("種類", selection: $presetKind) {
+                        Text("基本").tag(PresetProfileKind.basic)
+                        Text("複合").tag(PresetProfileKind.composite)
                     }
                     .pickerStyle(.segmented)
 
@@ -286,11 +286,11 @@ private struct PresetLibrary: View {
                         viewModel.saveCurrentProgramAsPreset(name: presetName, kind: presetKind)
                         presetName = ""
                     } label: {
-                        Label("Save Profile", systemImage: "square.and.arrow.down")
+                        Label("保存", systemImage: "square.and.arrow.down")
                     }
                 }
 
-                Section("Profiles") {
+                Section("保存済み") {
                     ForEach(viewModel.presetProfiles) { profile in
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
@@ -303,18 +303,18 @@ private struct PresetLibrary: View {
                                         .lineLimit(2)
                                 }
                                 Spacer()
-                                Text(profile.kind == .basic ? "Basic" : "Composite")
+                                Text(profile.kind == .basic ? "基本" : "複合")
                                     .font(.caption.bold())
                                     .foregroundStyle(.cyan)
                             }
 
                             HStack {
-                                Button("Apply") {
+                                Button("適用") {
                                     viewModel.applyPresetProfile(profile)
                                 }
                                 .buttonStyle(.borderedProminent)
 
-                                Button("Next Bar") {
+                                Button("次の小節") {
                                     viewModel.queuePresetProfile(profile)
                                 }
                                 .buttonStyle(.bordered)
@@ -324,13 +324,13 @@ private struct PresetLibrary: View {
                             Button(role: .destructive) {
                                 viewModel.deletePresetProfile(profile)
                             } label: {
-                                Label("Delete", systemImage: "trash")
+                                Label("削除", systemImage: "trash")
                             }
                         }
                     }
                 }
             }
-            .navigationTitle("Presets")
+            .navigationTitle("プリセット")
         }
     }
 }
@@ -358,17 +358,24 @@ private struct PlayDashboard: View {
                         .padding(.bottom, 230)
                 }
 
-                VStack(spacing: 18) {
-                    currentReadout
-                    Spacer()
-                    transport
-                    queuedChangePanel
+                ScrollView {
+                    VStack(spacing: 24) {
+                        currentReadout
+                        queuedChangePanel
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 14)
+                    .padding(.bottom, 24)
                 }
-                .padding(.horizontal, 18)
-                .padding(.bottom, 14)
             }
-            .navigationTitle("Metronome")
+            .navigationTitle("メトロノーム")
             .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                transport
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(.black.opacity(0.94))
+            }
         }
     }
 
@@ -392,7 +399,7 @@ private struct PlayDashboard: View {
                 }
             }
             .buttonStyle(.plain)
-            .gesture(
+            .simultaneousGesture(
                 DragGesture(minimumDistance: 8)
                     .onChanged { value in
                         if bpmDragStart == nil {
@@ -440,7 +447,7 @@ private struct PlayDashboard: View {
                 HStack(spacing: 8) {
                     Text(currentSection.meter.displayName)
                         .font(.system(size: 18, weight: .bold).monospacedDigit())
-                    Text("bar \(viewModel.currentBarIndex + 1)/\(currentSection.bars)")
+                        Text("小節 \(viewModel.currentBarIndex + 1)/\(currentSection.bars)")
                         .font(.system(size: 14, weight: .medium).monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
@@ -476,19 +483,20 @@ private struct PlayDashboard: View {
                 ZStack {
                     Circle()
                         .fill(viewModel.isPlaying ? Color.red.opacity(0.24) : Color.green.opacity(0.24))
-                    Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
-                        .font(.system(size: 42, weight: .bold))
-                        .foregroundStyle(viewModel.isPlaying ? .red : .green)
-                        .offset(x: viewModel.isPlaying ? 0 : 3)
+                Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
+                    .font(.system(size: 42, weight: .bold))
+                    .foregroundStyle(viewModel.isPlaying ? .red : .green)
+                    .offset(x: viewModel.isPlaying ? 0 : 3)
                 }
                 .frame(width: 108, height: 108)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(viewModel.isPlaying ? "メトロノームを停止" : "メトロノームを再生")
 
             Button {
                 viewModel.tapTempo()
             } label: {
-                ControlButton(icon: "hand.tap.fill", title: "Tap", tint: .cyan)
+                ControlButton(icon: "hand.tap.fill", title: "タップ", tint: .cyan)
             }
         }
     }
@@ -496,12 +504,12 @@ private struct PlayDashboard: View {
     private var queuedChangePanel: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("Next Bar Queue", systemImage: "clock.arrow.circlepath")
+                Label("次の小節から変更", systemImage: "clock.arrow.circlepath")
                     .font(.headline)
                     .foregroundStyle(.cyan)
                 Spacer()
                 if viewModel.queuedChange != nil {
-                    Text("Armed")
+                    Text("予約済み")
                         .font(.caption.bold())
                         .foregroundStyle(.orange)
                 }
@@ -509,7 +517,7 @@ private struct PlayDashboard: View {
 
             VStack(spacing: 12) {
                 HStack(spacing: 10) {
-                    Picker("Target BPM", selection: queuedBpmBinding) {
+                    Picker("変更先BPM", selection: queuedBpmBinding) {
                         ForEach(40...400, id: \.self) { value in
                             Text("\(value)").tag(value)
                         }
@@ -525,29 +533,29 @@ private struct PlayDashboard: View {
                     Button {
                         isQueueEditorPresented = true
                     } label: {
-                        Label("Edit Detail", systemImage: "slider.horizontal.3")
+                        Label("詳細設定", systemImage: "slider.horizontal.3")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
 
-                    Toggle("Loop", isOn: $queuedLoops)
+                    Toggle("ループ", isOn: $queuedLoops)
                         .toggleStyle(.switch)
                         .fixedSize()
                 }
 
-                DisclosureGroup("Tempo Change") {
+                DisclosureGroup("テンポ変化") {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
-                            NumberField(title: "Target", value: $tempoTargetBpm, range: 40...400)
-                            NumberField(title: "Bars", value: $tempoBars, range: 1...64)
+                            NumberField(title: "目標BPM", value: $tempoTargetBpm, range: 40...400)
+                            NumberField(title: "小節数", value: $tempoBars, range: 1...64)
                         }
 
                         Slider(value: tempoTargetSlider, in: 40...400, step: 1) {
-                            Text("Target BPM")
+                            Text("目標BPM")
                         }
 
                         Stepper(value: $tempoBars, in: 1...64) {
-                            Text("Bars: \(tempoBars)")
+                            Text("小節数: \(tempoBars)")
                                 .font(.caption.monospacedDigit())
                         }
                     }
@@ -555,7 +563,7 @@ private struct PlayDashboard: View {
                     Button {
                         viewModel.queueTempoAutomation(targetBpm: tempoTargetBpm, bars: tempoBars)
                     } label: {
-                        Label("Start Next Bar", systemImage: "speedometer")
+                        Label("次の小節から開始", systemImage: "speedometer")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
@@ -569,7 +577,7 @@ private struct PlayDashboard: View {
                 Button {
                     viewModel.queueChange(section: queuedDraft, loops: queuedLoops)
                 } label: {
-                    Label("Arm Change", systemImage: "forward.end.fill")
+                    Label("次の小節から適用", systemImage: "forward.end.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -582,10 +590,11 @@ private struct PlayDashboard: View {
                         .frame(width: 42, height: 36)
                 }
                 .buttonStyle(.bordered)
+                .accessibilityLabel("予約を解除")
             }
         }
         .padding(14)
-        .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .sheet(isPresented: $isQueueEditorPresented) {
             QueueDetailEditor(viewModel: viewModel, section: $queuedDraft, loops: $queuedLoops)
         }
@@ -622,9 +631,9 @@ private struct PlayDashboard: View {
 
     private func modeName(_ mode: RhythmMode) -> String {
         switch mode {
-        case .all: return "Full"
-        case .strongMedium: return "Beat"
-        case .strongOnly: return "Bar"
+        case .all: return "全て"
+        case .strongMedium: return "強・中"
+        case .strongOnly: return "強のみ"
         }
     }
 }
@@ -635,7 +644,7 @@ private struct BasicMeterRoller: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            Picker("Numerator", selection: numeratorBinding) {
+            Picker("分子", selection: numeratorBinding) {
                 ForEach(1...32, id: \.self) { value in
                     Text("\(value)").tag(value)
                 }
@@ -648,7 +657,7 @@ private struct BasicMeterRoller: View {
                 .font(.system(size: 26, weight: .bold))
                 .foregroundStyle(.secondary)
 
-            Picker("Denominator", selection: denominatorIndexBinding) {
+            Picker("分母", selection: denominatorIndexBinding) {
                 ForEach(viewModel.denominatorOptions.indices, id: \.self) { index in
                     Text("\(viewModel.denominatorOptions[index])").tag(index)
                 }
@@ -686,7 +695,7 @@ private struct QueueDetailEditor: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("BPM") {
+                Section("テンポ") {
                     Button {
                         isBpmEditing = true
                     } label: {
@@ -709,8 +718,8 @@ private struct QueueDetailEditor: View {
                     .clipped()
                 }
 
-                Section("Note") {
-                    Picker("Reference Note", selection: noteBinding) {
+                Section("基準音符") {
+                    Picker("音符", selection: noteBinding) {
                         ForEach(validNoteOptions.indices, id: \.self) { index in
                             Text(validNoteOptions[index].name)
                                 .tag(validNoteOptions[index].multiplier)
@@ -719,34 +728,34 @@ private struct QueueDetailEditor: View {
                     .pickerStyle(.menu)
                 }
 
-                Section("Meter") {
+                Section("拍子") {
                     MeterFullEditor(section: $section, noteValueOptions: viewModel.noteValueOptions)
                 }
 
-                Section("Click Mode") {
+                Section("クリックモード") {
                     SectionRhythmModePicker(section: $section)
                 }
 
-                Section("Special Accents") {
+                Section("アクセント") {
                     SectionAccentEditor(section: $section)
                 }
 
-                Section("Tempo Automation") {
+                Section("テンポ変化") {
                     TempoAutomationEditor(automation: $section.tempoAutomation, startBpm: section.bpm)
                 }
 
-                Section("Composite Options") {
+                Section("複合設定") {
                     Stepper(value: $section.bars, in: 1...999) {
-                        Text("Bars: \(section.bars)")
+                        Text("小節数: \(section.bars)")
                             .font(.system(size: 18, weight: .bold).monospacedDigit())
                     }
-                    Toggle("Loop after applying", isOn: $loops)
+                    Toggle("適用後にループ", isOn: $loops)
                 }
             }
-            .navigationTitle("Next Bar Detail")
+            .navigationTitle("次小節の設定")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button("完了") { dismiss() }
                 }
             }
             .sheet(isPresented: $isBpmEditing) {
@@ -773,12 +782,12 @@ private struct SectionRhythmModePicker: View {
     @Binding var section: ProgramSection
 
     var body: some View {
-        Picker("Click Mode", selection: rhythmModeBinding) {
-            Label("Full", systemImage: "speaker.wave.3.fill")
+        Picker("クリックモード", selection: rhythmModeBinding) {
+            Label("全て", systemImage: "speaker.wave.3.fill")
                 .tag(RhythmMode.all.rawValue)
-            Label("Beat", systemImage: "speaker.wave.1.fill")
+            Label("強・中", systemImage: "speaker.wave.1.fill")
                 .tag(RhythmMode.strongMedium.rawValue)
-            Label("Bar", systemImage: "speaker.fill")
+            Label("強のみ", systemImage: "speaker.fill")
                 .tag(RhythmMode.strongOnly.rawValue)
         }
         .pickerStyle(.segmented)
@@ -809,7 +818,7 @@ private struct SectionAccentEditor: View {
                 }
             }
 
-            Button(section.accents == nil ? "Enable Special Accents" : "Reset Accents") {
+            Button(section.accents == nil ? "アクセントを設定" : "アクセントを解除") {
                 if section.accents == nil {
                     section.accents = Array(repeating: false, count: count)
                 } else {
@@ -886,7 +895,7 @@ private struct MeterFullEditor: View {
             }
 
             HStack(spacing: 0) {
-                Picker("Numerator", selection: numeratorBinding) {
+            Picker("分子", selection: numeratorBinding) {
                     ForEach(1...32, id: \.self) { value in
                         Text("\(value)").tag(value)
                     }
@@ -900,7 +909,7 @@ private struct MeterFullEditor: View {
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(.secondary)
 
-                Picker("Denominator", selection: denominatorBinding) {
+            Picker("分母", selection: denominatorBinding) {
                     ForEach(denominatorOptions, id: \.self) { value in
                         Text("\(value)").tag(value)
                     }
@@ -967,8 +976,8 @@ private struct TempoAutomationEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker("Tempo Change", selection: $automation.shape) {
-                Text("None").tag(TempoAutomationShape.none)
+            Picker("テンポ変化", selection: $automation.shape) {
+                Text("なし").tag(TempoAutomationShape.none)
                 Text("rit.").tag(TempoAutomationShape.ritardando)
                 Text("accel.").tag(TempoAutomationShape.accelerando)
             }
@@ -976,13 +985,13 @@ private struct TempoAutomationEditor: View {
 
             if automation.shape != .none {
                 HStack {
-                    NumberField(title: "Target", value: $automation.targetBpm, range: targetRange)
-                    NumberField(title: "Bars", value: $automation.lengthInBars, range: 1...64)
+                    NumberField(title: "目標BPM", value: $automation.targetBpm, range: targetRange)
+                    NumberField(title: "小節数", value: $automation.lengthInBars, range: 1...64)
                 }
                 Slider(value: targetSlider, in: Double(targetRange.lowerBound)...Double(targetRange.upperBound), step: 1) {
-                    Text("Target")
+                    Text("目標BPM")
                 }
-                Text("\(startBpm) -> \(automation.targetBpm) BPM over \(automation.lengthInBars) bars")
+                Text("\(startBpm) → \(automation.targetBpm) BPM / \(automation.lengthInBars)小節")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
@@ -1079,8 +1088,9 @@ private struct ModernPieIndicatorView: View {
             let outerRadius = radius - 10
             let innerRadius = outerRadius - 28
             let isPlaying = viewModel.isPlaying
-            let progress = isPlaying ? currentMeasureProgress() : 0.0
-            let safeProgress = progress.truncatingRemainder(dividingBy: 1.0)
+            let rawProgress = isPlaying ? currentMeasureProgress() : 0.0
+            let progress = rawProgress.truncatingRemainder(dividingBy: 1.0)
+            let safeProgress = progress > 0.999 ? 0.0 : progress
             let currentAngle = safeProgress * 360.0 - 90.0
 
             drawArc(context: context, center: center, radius: outerRadius, start: -90, end: 270, color: .white.opacity(0.08), width: 5)
@@ -1142,7 +1152,7 @@ private struct BpmDirectInput: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            Text("Set BPM")
+            Text("BPMを入力")
                 .font(.headline)
 
             TextField("BPM", text: $text)
@@ -1153,7 +1163,7 @@ private struct BpmDirectInput: View {
                     text = "\(bpm)"
                 }
 
-            Button("Done") {
+            Button("完了") {
                 if let value = Int(text) {
                     bpm = min(400, max(40, value))
                 }

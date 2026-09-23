@@ -39,6 +39,11 @@ enum TempoAutomationShape: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+enum ProgramEndBehavior: String, Codable {
+    case stop
+    case holdLastSection
+}
+
 struct TempoAutomation: Codable, Hashable {
     var shape: TempoAutomationShape
     var targetBpm: Int
@@ -98,12 +103,14 @@ struct QueuedMetronomeChange: Codable, Hashable, Identifiable {
     var section: ProgramSection
     var loops: Bool
     var program: MetronomeProgram?
+    var endBehavior: ProgramEndBehavior
 
-    init(id: UUID = UUID(), section: ProgramSection, loops: Bool = true) {
+    init(id: UUID = UUID(), section: ProgramSection, loops: Bool = true, endBehavior: ProgramEndBehavior = .stop) {
         self.id = id
         self.section = section
         self.loops = loops
         self.program = nil
+        self.endBehavior = endBehavior
     }
 
     init(id: UUID = UUID(), program: MetronomeProgram) {
@@ -111,6 +118,20 @@ struct QueuedMetronomeChange: Codable, Hashable, Identifiable {
         self.section = program.sections.first ?? ProgramSection()
         self.loops = program.loops
         self.program = program
+        self.endBehavior = program.endBehavior
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, section, loops, program, endBehavior
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(UUID.self, forKey: .id)
+        section = try values.decode(ProgramSection.self, forKey: .section)
+        loops = try values.decode(Bool.self, forKey: .loops)
+        program = try values.decodeIfPresent(MetronomeProgram.self, forKey: .program)
+        endBehavior = try values.decodeIfPresent(ProgramEndBehavior.self, forKey: .endBehavior) ?? .stop
     }
 }
 
@@ -140,17 +161,36 @@ struct MetronomeProgram: Codable, Hashable, Identifiable {
     var name: String
     var sections: [ProgramSection]
     var loops: Bool
+    var endBehavior: ProgramEndBehavior
 
     init(
         id: UUID = UUID(),
         name: String = "Program",
         sections: [ProgramSection] = [ProgramSection(name: "A")],
-        loops: Bool = true
+        loops: Bool = true,
+        endBehavior: ProgramEndBehavior = .stop
     ) {
         self.id = id
         self.name = name
         self.sections = sections.isEmpty ? [ProgramSection(name: "A")] : sections
         self.loops = loops
+        self.endBehavior = endBehavior
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, sections, loops, endBehavior
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(UUID.self, forKey: .id)
+        name = try values.decode(String.self, forKey: .name)
+        sections = try values.decode([ProgramSection].self, forKey: .sections)
+        loops = try values.decode(Bool.self, forKey: .loops)
+        endBehavior = try values.decodeIfPresent(ProgramEndBehavior.self, forKey: .endBehavior) ?? .stop
+        if sections.isEmpty {
+            sections = [ProgramSection(name: "A")]
+        }
     }
 
     static var defaultProgram: MetronomeProgram {
