@@ -213,7 +213,7 @@ final class MetronomeViewModel: ObservableObject {
         #if os(watchOS)
         hapticManager.playWeak()
         #else
-        clickSoundManager.play(.weak)
+        clickSoundManager.play(.weak, autoStopWhenIdle: !isPlaying)
         #endif
     }
 
@@ -244,6 +244,9 @@ final class MetronomeViewModel: ObservableObject {
         setupEngine()
         setupConnectivity()
         isSystemReady = true
+#if os(iOS)
+        syncToRemote()
+#endif
     }
 
     private func setupEngine() {
@@ -269,6 +272,7 @@ final class MetronomeViewModel: ObservableObject {
                 guard let self else { return }
                 self.objectWillChange.send()
                 #if os(iOS)
+                self.clickSoundManager.stop()
                 ConnectivityManager.shared.sendTransportCommand("stop")
                 #endif
             }
@@ -420,6 +424,9 @@ final class MetronomeViewModel: ObservableObject {
                 numerator: self.numerator,
                 denominator: self.engine.denominator
             )
+#if os(iOS)
+            ConnectivityManager.shared.sendQueuedChange(self.queuedChange)
+#endif
         }
         remoteSyncWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(160), execute: workItem)
@@ -445,6 +452,9 @@ final class MetronomeViewModel: ObservableObject {
         objectWillChange.send()
         if engine.isPlaying {
             engine.stop()
+            #if os(iOS)
+            clickSoundManager.stop()
+            #endif
             if sync { ConnectivityManager.shared.sendTransportCommand("stop") }
         } else {
             remoteSyncWorkItem?.cancel()

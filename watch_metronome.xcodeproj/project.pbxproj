@@ -87,6 +87,11 @@
 			path = watch_metronomeUITests;
 			sourceTree = "<group>";
 		};
+		98114BA02FBAFABC00E66AEC /* watch_metronomeTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = watch_metronomeTests;
+			sourceTree = "<group>";
+		};
 		98114B862FBAFABC00E66AEC /* watch_metronome Watch App */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "watch_metronome Watch App";
@@ -156,6 +161,7 @@
 				98114B5B2FBAFABB00E66AF1 /* watch_metronome */,
 				98114B5C2FBAFABB00E66AF2 /* Shared */,
 				98114B792FBAFABC00E66AEC /* watch_metronomeUITests */,
+				98114BA02FBAFABC00E66AEC /* watch_metronomeTests */,
 				98114B862FBAFABC00E66AEC /* watch_metronome Watch App */,
 				98114B942FBAFABC00E66AEC /* watch_metronome Watch AppTests */,
 				98114B9E2FBAFABC00E66AEC /* watch_metronome Watch AppUITests */,
@@ -216,6 +222,9 @@
 			);
 			dependencies = (
 				98114B6E2FBAFABC00E66AEC /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				98114BA02FBAFABC00E66AEC /* watch_metronomeTests */,
 			);
 			name = watch_metronomeTests;
 			packageProductDependencies = (
@@ -686,13 +695,13 @@
 				DEVELOPMENT_TEAM = Z8P258MVHM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = iOS-Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = watch_metronome;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -722,13 +731,13 @@
 				DEVELOPMENT_TEAM = Z8P258MVHM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = iOS-Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = watch_metronome;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

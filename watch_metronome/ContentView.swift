@@ -30,7 +30,9 @@ struct ContentView: View {
                     .tag(2)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .safeAreaInset(edge: .bottom) {
             ScreenIndexBar(selectedTab: $selectedTab)
         }
@@ -77,7 +79,7 @@ private struct ScreenIndexBar: View {
         .padding(.horizontal, 14)
         .padding(.top, 8)
         .padding(.bottom, 6)
-        .background(.black.opacity(0.92))
+        .background(.black)
     }
 }
 
@@ -121,8 +123,10 @@ private struct CompositeEditor: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.cyan)
+                        .accessibilityIdentifier("add-meter-module")
 
                         Toggle("ループ再生", isOn: loopBinding)
+                            .accessibilityIdentifier("composite-loop")
                             .padding(14)
                             .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
@@ -187,7 +191,7 @@ private struct MeterModuleCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(section.meter.displayName)
                         .font(.system(size: 30, weight: .black).monospacedDigit())
-                    Text("\(section.bars) bars  \(section.bpm) BPM")
+                    Text("\(section.bars)小節  ·  \(section.bpm) BPM")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
@@ -200,6 +204,7 @@ private struct MeterModuleCard: View {
 
             TextField("拍子名", text: $section.name)
                 .textFieldStyle(.roundedBorder)
+                .accessibilityIdentifier("meter-module-name")
 
             MeterFullEditor(section: $section, noteValueOptions: viewModel.noteValueOptions)
 
@@ -217,9 +222,14 @@ private struct MeterModuleCard: View {
                 }
             }
 
-            Slider(value: bpmSlider, in: 40...400, step: 1) {
-                Text("BPM")
+            Picker("BPM", selection: $section.bpm) {
+                ForEach(40...400, id: \.self) { value in
+                    Text("\(value)").tag(value)
+                }
             }
+            .pickerStyle(.wheel)
+            .frame(height: 96)
+            .clipped()
 
             Picker("基準音符", selection: noteBinding) {
                 ForEach(validNoteOptions.indices, id: \.self) { index in
@@ -241,13 +251,6 @@ private struct MeterModuleCard: View {
         }
         .padding(14)
         .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-
-    private var bpmSlider: Binding<Double> {
-        Binding(
-            get: { Double(section.bpm) },
-            set: { section.bpm = Int($0) }
-        )
     }
 
     private var noteBinding: Binding<Double> {
@@ -272,11 +275,13 @@ private struct PresetLibrary: View {
             List {
                 Section("プロファイルを保存") {
                     TextField("プリセット名", text: $presetName)
+                        .accessibilityIdentifier("preset-name-input")
                     Picker("種類", selection: $presetKind) {
                         Text("基本").tag(PresetProfileKind.basic)
                         Text("複合").tag(PresetProfileKind.composite)
                     }
                     .pickerStyle(.segmented)
+                    .accessibilityIdentifier("preset-kind")
 
                     Button {
                         viewModel.saveCurrentProgramAsPreset(name: presetName, kind: presetKind)
@@ -284,6 +289,7 @@ private struct PresetLibrary: View {
                     } label: {
                         Label("保存", systemImage: "square.and.arrow.down")
                     }
+                    .accessibilityIdentifier("save-preset")
                 }
 
                 Section("保存済み") {
@@ -309,13 +315,17 @@ private struct PresetLibrary: View {
                                     viewModel.applyPresetProfile(profile)
                                 }
                                 .buttonStyle(.borderedProminent)
+                                .accessibilityIdentifier("apply-preset-\(profile.name)")
 
                                 Button("次の小節") {
                                     viewModel.queuePresetProfile(profile)
                                 }
                                 .buttonStyle(.bordered)
+                                .accessibilityIdentifier("queue-preset-\(profile.name)")
                             }
                         }
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier("preset-profile-\(profile.name)")
                         .swipeActions {
                             Button(role: .destructive) {
                                 viewModel.deletePresetProfile(profile)
@@ -336,42 +346,39 @@ private struct PlayDashboard: View {
     @ObservedObject var viewModel: MetronomeViewModel
     @Binding var queuedDraft: ProgramSection
     @Binding var queuedLoops: Bool
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var isBpmEditing = false
     @State private var isQueueEditorPresented = false
+    @State private var isTempoAutomationExpanded = false
     @State private var tempoTargetBpm = 96
     @State private var tempoBars = 4
     @State private var bpmDragStart: Int?
 
+    private var isCompactLayout: Bool { verticalSizeClass == .compact }
+
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.black.ignoresSafeArea()
-
-                TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !viewModel.isPlaying)) { context in
-                    ModernPieIndicatorView(viewModel: viewModel, date: context.date)
+            VStack(spacing: 0) {
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            currentReadout
+                            queuedChangePanel
+                        }
                         .padding(.horizontal, 18)
-                        .padding(.top, 70)
-                        .padding(.bottom, 230)
+                        .padding(.top, 14)
+                        .padding(.bottom, 24)
+                    }
                 }
 
-                ScrollView {
-                    VStack(spacing: 24) {
-                        currentReadout
-                        queuedChangePanel
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 14)
-                    .padding(.bottom, 24)
-                }
-            }
-            .navigationTitle("メトロノーム")
-            .navigationBarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
                 transport
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(.black.opacity(0.94))
+                    .background(.black)
             }
+            .navigationTitle("メトロノーム")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 
@@ -381,7 +388,7 @@ private struct PlayDashboard: View {
     }
 
     private var currentReadout: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text("\(viewModel.bpm)")
                     .font(.system(size: 86, weight: .black).monospacedDigit())
@@ -392,7 +399,7 @@ private struct PlayDashboard: View {
             }
             .contentShape(Rectangle())
             .onTapGesture { isBpmEditing = true }
-            .gesture(
+            .highPriorityGesture(
                 DragGesture(minimumDistance: 8)
                     .onChanged { value in
                         if bpmDragStart == nil { bpmDragStart = viewModel.bpm }
@@ -407,11 +414,26 @@ private struct PlayDashboard: View {
             .accessibilityLabel("\(viewModel.bpm) BPM")
             .accessibilityAddTraits(.isButton)
             .accessibilityIdentifier("main-bpm")
+            .accessibilityHint("上下にドラッグして調整、タップして数字を入力")
             .accessibilityAction { isBpmEditing = true }
             .sheet(isPresented: $isBpmEditing) {
                 BpmDirectInput(bpm: bpmBinding)
                     .presentationDetents([.height(200)])
             }
+
+            TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !viewModel.isPlaying)) { context in
+                ModernPieIndicatorView(viewModel: viewModel, date: context.date)
+                    .frame(width: 188, height: 188)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 188)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("拍の進行")
+            .accessibilityValue(
+                viewModel.isPlaying
+                    ? "\(Int(floor(viewModel.currentBeat)))拍目 / \(viewModel.numerator)拍"
+                    : "停止中"
+            )
 
             HStack(spacing: 16) {
                 Menu {
@@ -443,34 +465,39 @@ private struct PlayDashboard: View {
                 HStack(spacing: 8) {
                     Text(currentSection.meter.displayName)
                         .font(.system(size: 18, weight: .bold).monospacedDigit())
-                        Text("小節 \(viewModel.currentBarIndex + 1)/\(currentSection.bars)")
+                        .accessibilityIdentifier("current-meter")
+                    Text("小節 \(viewModel.currentBarIndex + 1)/\(currentSection.bars)")
                         .font(.system(size: 14, weight: .medium).monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
             }
 
             BasicMeterRoller(viewModel: viewModel)
-                .frame(height: 112)
+                .frame(height: 92)
 
-            // Drumroll BPM Selector
             Picker("BPM", selection: bpmBinding) {
                 ForEach(40...400, id: \.self) { value in
                     Text("\(value)").tag(value)
                 }
             }
             .pickerStyle(.wheel)
-            .frame(height: 100)
+            .frame(height: 88)
             .clipped()
         }
-        .padding(.top, 14)
+        .padding(.top, 8)
     }
 
     private var transport: some View {
-        HStack(spacing: 18) {
+        HStack(spacing: isCompactLayout ? 12 : 18) {
             Button {
                 viewModel.nextRhythmMode()
             } label: {
-                ControlButton(icon: modeIcon(viewModel.rhythmMode), title: modeName(viewModel.rhythmMode), tint: .blue)
+                ControlButton(
+                    icon: modeIcon(viewModel.rhythmMode),
+                    title: modeName(viewModel.rhythmMode),
+                    tint: .blue,
+                    size: isCompactLayout ? 60 : 76
+                )
             }
 
             Button {
@@ -479,20 +506,21 @@ private struct PlayDashboard: View {
                 ZStack {
                     Circle()
                         .fill(viewModel.isPlaying ? Color.red.opacity(0.24) : Color.green.opacity(0.24))
-                Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
-                    .font(.system(size: 42, weight: .bold))
-                    .foregroundStyle(viewModel.isPlaying ? .red : .green)
-                    .offset(x: viewModel.isPlaying ? 0 : 3)
+                    Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
+                        .font(.system(size: isCompactLayout ? 34 : 42, weight: .bold))
+                        .foregroundStyle(viewModel.isPlaying ? .red : .green)
+                        .offset(x: viewModel.isPlaying ? 0 : 3)
                 }
-                .frame(width: 108, height: 108)
+                .frame(width: isCompactLayout ? 82 : 108, height: isCompactLayout ? 82 : 108)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(viewModel.isPlaying ? "メトロノームを停止" : "メトロノームを再生")
+            .accessibilityHint("音による拍の再生を切り替えます")
 
             Button {
                 viewModel.tapTempo()
             } label: {
-                ControlButton(icon: "hand.tap.fill", title: "タップ", tint: .cyan)
+                ControlButton(icon: "hand.tap.fill", title: "タップ", tint: .cyan, size: isCompactLayout ? 60 : 76)
             }
         }
     }
@@ -539,7 +567,7 @@ private struct PlayDashboard: View {
                         .fixedSize()
                 }
 
-                DisclosureGroup("テンポ変化") {
+                DisclosureGroup(isExpanded: $isTempoAutomationExpanded) {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
                             NumberField(title: "目標BPM", value: $tempoTargetBpm, range: 40...400)
@@ -564,6 +592,10 @@ private struct PlayDashboard: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.orange)
+                    .accessibilityIdentifier("start-tempo-automation")
+                } label: {
+                    Text("テンポ変化")
+                        .accessibilityIdentifier("tempo-automation-toggle")
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -808,7 +840,7 @@ private struct SectionAccentEditor: View {
         VStack(alignment: .leading, spacing: 12) {
             LazyVGrid(columns: columns, spacing: 10) {
                 ForEach(0..<count, id: \.self) { index in
-                    Toggle("\(index + 1)", isOn: accentBinding(index, count: count))
+                    Toggle("\(index + 1)拍目", isOn: accentBinding(index, count: count))
                         .toggleStyle(.button)
                         .disabled(index == 0)
                 }
@@ -1032,16 +1064,27 @@ private struct NumberField: View {
     let title: String
     @Binding var value: Int
     let range: ClosedRange<Int>
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            TextField(title, value: sanitizedValue, format: .number)
-                .keyboardType(.numberPad)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(size: 18, weight: .bold).monospacedDigit())
+            HStack(spacing: 6) {
+                TextField(title, value: sanitizedValue, format: .number)
+                    .keyboardType(.numberPad)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 18, weight: .bold).monospacedDigit())
+                    .focused($isFocused)
+
+                if isFocused {
+                    Button("完了") { isFocused = false }
+                        .font(.caption.bold())
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("number-field-done")
+                }
+            }
         }
     }
 
@@ -1058,6 +1101,7 @@ private struct ControlButton: View {
     let icon: String
     let title: String
     let tint: Color
+    let size: CGFloat
 
     var body: some View {
         VStack(spacing: 6) {
@@ -1066,7 +1110,7 @@ private struct ControlButton: View {
             Text(title)
                 .font(.system(size: 12, weight: .bold))
         }
-        .frame(width: 76, height: 76)
+        .frame(width: size, height: size)
         .foregroundStyle(tint)
         .background(tint.opacity(0.16), in: Circle())
     }
@@ -1151,13 +1195,29 @@ private struct BpmDirectInput: View {
             Text("BPMを入力")
                 .font(.headline)
 
-            TextField("BPM", text: $text)
-                .keyboardType(.numberPad)
-                .multilineTextAlignment(.center)
-                .font(.system(size: 48, weight: .bold).monospacedDigit())
-                .onAppear {
-                    text = "\(bpm)"
+            HStack(spacing: 8) {
+                TextField("BPM", text: $text)
+                    .keyboardType(.numberPad)
+                    .multilineTextAlignment(.center)
+                    .font(.system(size: 48, weight: .bold).monospacedDigit())
+                    .accessibilityIdentifier("bpm-direct-input")
+                    .onAppear {
+                        text = "\(bpm)"
+                    }
+
+                if !text.isEmpty {
+                    Button {
+                        text = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("入力を消去")
+                    .accessibilityIdentifier("bpm-clear-input")
                 }
+            }
 
             Button("完了") {
                 if let value = Int(text) {

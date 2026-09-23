@@ -10,13 +10,22 @@ import Foundation
 @testable import watch_metronome_Watch_App
 
 /// MetronomeEngine の挙動を検証するテスト
+@MainActor
 struct MetronomeEngineTests {
 
     @Test("4拍子の時、1拍目だけが強拍になるかテスト")
     func testFourFourTime() async throws {
         let engine = MetronomeEngine()
-        engine.bpm = 600 // テストを早く終わらせるために速いテンポにします
-        engine.numerator = 4
+        engine.applyProgram(
+            MetronomeProgram(
+                sections: [ProgramSection(
+                    name: "4/32",
+                    meter: MeterPattern(numerator: 4, denominator: 32),
+                    bpm: 400,
+                    referenceNoteMultiplier: 0.125
+                )]
+            )
+        )
         
         var recordedBeats: [Int] = []
         var recordedStrongFlags: [Bool] = []
@@ -34,7 +43,7 @@ struct MetronomeEngineTests {
         engine.start()
         
         // 4回鳴るまで少し待つ（非同期処理の待機）
-        try await Task.sleep(nanoseconds: 500_000_000) // 0.5秒待機
+        try await Task.sleep(nanoseconds: 800_000_000)
         
         engine.stop()
         
@@ -45,24 +54,27 @@ struct MetronomeEngineTests {
         }
         
         #expect(beats.count >= 4)
-        // 1拍目、2拍目、3拍目、4拍目と記録されているはず
-        #expect(beats[0] == 1)
-        #expect(beats[1] == 2)
-        #expect(beats[2] == 3)
-        #expect(beats[3] == 4)
-        
-        // 強拍の答え合わせ（1拍目だけが true）
-        #expect(strongFlags[0] == true)
-        #expect(strongFlags[1] == false)
-        #expect(strongFlags[2] == false)
-        #expect(strongFlags[3] == false)
+        if beats.count >= 4 {
+            #expect(Array(beats.prefix(4)) == [1, 2, 3, 4])
+            #expect(Array(strongFlags.prefix(4)) == [true, false, false, false])
+        }
     }
 
     @Test("分子が0の時、1拍子に補正されるかテスト")
     func testZeroNumeratorClampsToOne() async throws {
         let engine = MetronomeEngine()
-        engine.bpm = 600
         engine.numerator = 0
+        #expect(engine.numerator == 1)
+        engine.applyProgram(
+            MetronomeProgram(
+                sections: [ProgramSection(
+                    name: "1/32",
+                    meter: MeterPattern(numerator: 1, denominator: 32),
+                    bpm: 400,
+                    referenceNoteMultiplier: 0.125
+                )]
+            )
+        )
         
         var recordedIntensities: [BeatIntensity] = []
         let recordingQueue = DispatchQueue(label: "metronome.test.zeroNumerator")
@@ -89,8 +101,16 @@ struct MetronomeEngineTests {
     @Test("分子が1の時、全て強拍になるかテスト")
     func testOneNumerator() async throws {
         let engine = MetronomeEngine()
-        engine.bpm = 600
-        engine.numerator = 1 // 全て強拍設定
+        engine.applyProgram(
+            MetronomeProgram(
+                sections: [ProgramSection(
+                    name: "1/32",
+                    meter: MeterPattern(numerator: 1, denominator: 32),
+                    bpm: 400,
+                    referenceNoteMultiplier: 0.125
+                )]
+            )
+        )
         
         var weakCount = 0
         let recordingQueue = DispatchQueue(label: "metronome.test.oneNumerator")
@@ -115,14 +135,49 @@ struct MetronomeEngineTests {
         #expect(recordedWeakCount == 0)
     }
 
+    @Test("特殊アクセントでは1拍目を強拍に固定し、選択拍を中拍にする")
+    func testCustomAccentsKeepFirstBeatStrong() async throws {
+        let engine = MetronomeEngine()
+        engine.applyProgram(
+            MetronomeProgram(
+                sections: [ProgramSection(
+                    name: "Accent",
+                    meter: MeterPattern(numerator: 4, denominator: 32),
+                    bpm: 400,
+                    referenceNoteMultiplier: 0.125,
+                    accents: [false, true, false, true]
+                )]
+            )
+        )
+
+        var recordedIntensities: [BeatIntensity] = []
+        let recordingQueue = DispatchQueue(label: "metronome.test.customAccents")
+        engine.onTick = { _, intensity, _ in
+            recordingQueue.sync {
+                recordedIntensities.append(intensity)
+            }
+        }
+
+        engine.start()
+        try await Task.sleep(nanoseconds: 800_000_000)
+        engine.stop()
+
+        let intensities = recordingQueue.sync { recordedIntensities }
+        #expect(intensities.count >= 4)
+        if intensities.count >= 4 {
+            #expect(Array(intensities.prefix(4)) == [.strong, .medium, .weak, .medium])
+        }
+    }
+
     @Test("テンポ変化が指定小節数の最終小節で目標BPMに到達するかテスト")
     func testTempoAutomationReachesTargetOnFinalBar() async throws {
         let engine = MetronomeEngine()
         let section = ProgramSection(
             name: "rit.",
-            meter: MeterPattern(numerator: 1, denominator: 4),
+            meter: MeterPattern(numerator: 1, denominator: 32),
             bpm: 400,
             bars: 4,
+            referenceNoteMultiplier: 0.125,
             tempoAutomation: TempoAutomation(shape: .ritardando, targetBpm: 100, lengthInBars: 4)
         )
         engine.applyProgram(MetronomeProgram(name: "Tempo", sections: [section], loops: false))
@@ -136,7 +191,7 @@ struct MetronomeEngineTests {
         }
 
         engine.start()
-        try await Task.sleep(nanoseconds: 700_000_000)
+        try await Task.sleep(nanoseconds: 1_000_000_000)
         engine.stop()
 
         let bpms = recordingQueue.sync {
@@ -220,7 +275,13 @@ struct MetronomeEngineTests {
             MetronomeProgram(
                 name: "Base",
                 sections: [
-                    ProgramSection(name: "Base", meter: MeterPattern(numerator: 1, denominator: 32), bpm: 400, bars: 8)
+                    ProgramSection(
+                        name: "Base",
+                        meter: MeterPattern(numerator: 1, denominator: 32),
+                        bpm: 400,
+                        bars: 8,
+                        referenceNoteMultiplier: 0.125
+                    )
                 ],
                 loops: true
             )
@@ -229,37 +290,51 @@ struct MetronomeEngineTests {
         let queuedProgram = MetronomeProgram(
             name: "Queued",
             sections: [
-                ProgramSection(name: "QueuedA", meter: MeterPattern(numerator: 3, denominator: 32), bpm: 320, bars: 1),
-                ProgramSection(name: "QueuedB", meter: MeterPattern(numerator: 4, denominator: 32), bpm: 280, bars: 1)
+                ProgramSection(
+                    name: "QueuedA",
+                    meter: MeterPattern(numerator: 3, denominator: 32),
+                    bpm: 320,
+                    bars: 1,
+                    referenceNoteMultiplier: 0.125
+                ),
+                ProgramSection(
+                    name: "QueuedB",
+                    meter: MeterPattern(numerator: 4, denominator: 32),
+                    bpm: 280,
+                    bars: 1,
+                    referenceNoteMultiplier: 0.125
+                )
             ],
             loops: false
         )
 
         var firstAppliedSection: ProgramSection?
         var appliedProgramName: String?
+        var firstAppliedBpm: Int?
         let recordingQueue = DispatchQueue(label: "metronome.test.queuedProgram")
         engine.onMeasureStart = { _, _, section, program in
             recordingQueue.sync {
                 if firstAppliedSection == nil {
                     firstAppliedSection = section
                     appliedProgramName = program.name
+                    firstAppliedBpm = engine.bpm
                 }
             }
         }
 
         engine.start()
         engine.queueChangeForNextMeasure(QueuedMetronomeChange(program: queuedProgram))
-        try await Task.sleep(nanoseconds: 220_000_000)
+        try await Task.sleep(nanoseconds: 600_000_000)
         engine.stop()
 
         let appliedState = recordingQueue.sync {
-            (firstAppliedSection, appliedProgramName)
+            (firstAppliedSection, appliedProgramName, firstAppliedBpm)
         }
 
         #expect(appliedState.0?.name == "QueuedA")
         #expect(appliedState.0?.meter.displayName == "3/32")
         #expect(appliedState.1 == "Queued")
-        #expect(engine.bpm == 320)
+        #expect(appliedState.2 == 320)
     }
 
     @Test("以前のプリセット形式は既定の終端動作で読み込まれる")

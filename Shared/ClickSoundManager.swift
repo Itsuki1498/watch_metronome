@@ -12,7 +12,9 @@ final class ClickSoundManager {
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
     private let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
+    private let lock = NSRecursiveLock()
     private var buffers: [BeatIntensity: AVAudioPCMBuffer] = [:]
+    private var idleShutdown: DispatchWorkItem?
 
     init() {
         engine.attach(player)
@@ -23,9 +25,13 @@ final class ClickSoundManager {
     }
     #endif
 
-    func play(_ intensity: BeatIntensity) {
+    func play(_ intensity: BeatIntensity, autoStopWhenIdle: Bool = false) {
         guard intensity != .silence else { return }
         #if canImport(AVFoundation) && !os(watchOS)
+        lock.lock()
+        defer { lock.unlock() }
+        idleShutdown?.cancel()
+        idleShutdown = nil
         do {
             if !engine.isRunning {
                 try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
@@ -38,9 +44,26 @@ final class ClickSoundManager {
             if let buffer = buffers[intensity] {
                 player.scheduleBuffer(buffer, at: nil, options: .interruptsAtLoop, completionHandler: nil)
             }
+            if autoStopWhenIdle {
+                let shutdown = DispatchWorkItem { [weak self] in self?.stop() }
+                idleShutdown = shutdown
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: shutdown)
+            }
         } catch {
             return
         }
+        #endif
+    }
+
+    func stop() {
+        #if canImport(AVFoundation) && !os(watchOS)
+        lock.lock()
+        defer { lock.unlock() }
+        idleShutdown?.cancel()
+        idleShutdown = nil
+        player.stop()
+        engine.stop()
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         #endif
     }
 

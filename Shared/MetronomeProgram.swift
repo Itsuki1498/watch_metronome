@@ -12,22 +12,50 @@ struct MeterPattern: Codable, Hashable, Identifiable {
 
     init(id: UUID = UUID(), groups: [Int] = [4], denominator: Int = 4) {
         self.id = id
-        self.groups = groups.map { max(1, $0) }
-        self.denominator = denominator
+        var total = 0
+        self.groups = (groups.isEmpty ? [1] : groups).compactMap { group in
+            guard total < 32 else { return nil }
+            let value = min(32 - total, max(1, group))
+            total += value
+            return value
+        }
+        self.denominator = max(1, denominator)
     }
 
     init(id: UUID = UUID(), numerator: Int, denominator: Int) {
-        self.id = id
-        self.groups = [max(1, numerator)]
-        self.denominator = denominator
+        self.init(id: id, groups: [numerator], denominator: denominator)
     }
 
     var numerator: Int {
-        max(1, groups.reduce(0, +))
+        max(1, groups.reduce(0) { total, group in
+            min(32, total + min(32, max(1, group)))
+        })
     }
 
     var displayName: String {
         "\(numerator)/\(denominator)"
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, groups, numerator, denominator
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let groups = try values.decodeIfPresent([Int].self, forKey: .groups)
+            ?? [values.decodeIfPresent(Int.self, forKey: .numerator) ?? 4]
+        self.init(
+            id: try values.decodeIfPresent(UUID.self, forKey: .id) ?? UUID(),
+            groups: groups,
+            denominator: try values.decodeIfPresent(Int.self, forKey: .denominator) ?? 4
+        )
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(id, forKey: .id)
+        try values.encode(groups, forKey: .groups)
+        try values.encode(denominator, forKey: .denominator)
     }
 }
 
@@ -52,7 +80,20 @@ struct TempoAutomation: Codable, Hashable {
     init(shape: TempoAutomationShape = .none, targetBpm: Int = 120, lengthInBars: Int = 1) {
         self.shape = shape
         self.targetBpm = min(400, max(40, targetBpm))
-        self.lengthInBars = max(1, lengthInBars)
+        self.lengthInBars = min(64, max(1, lengthInBars))
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case shape, targetBpm, lengthInBars
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            shape: try values.decodeIfPresent(TempoAutomationShape.self, forKey: .shape) ?? .none,
+            targetBpm: try values.decodeIfPresent(Int.self, forKey: .targetBpm) ?? 120,
+            lengthInBars: try values.decodeIfPresent(Int.self, forKey: .lengthInBars) ?? 1
+        )
     }
 }
 
@@ -82,11 +123,13 @@ struct ProgramSection: Codable, Hashable, Identifiable {
         self.name = name
         self.meter = meter
         self.bpm = min(400, max(40, bpm))
-        self.bars = max(1, bars)
-        self.referenceNoteMultiplier = referenceNoteMultiplier
+        self.bars = min(999, max(1, bars))
+        self.referenceNoteMultiplier = referenceNoteMultiplier.isFinite
+            ? min(4.0, max(0.125, referenceNoteMultiplier))
+            : 1.0
         self.rhythmModeRawValue = rhythmMode.rawValue
         self.tempoAutomation = tempoAutomation
-        self.accents = accents
+        self.accents = accents.map { Array($0.prefix(32)) }
     }
 
     var rhythmMode: RhythmMode {
@@ -95,6 +138,25 @@ struct ProgramSection: Codable, Hashable, Identifiable {
 
     var displayName: String {
         "\(meter.displayName)  \(bpm) BPM"
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, meter, bpm, bars, referenceNoteMultiplier, rhythmModeRawValue, tempoAutomation, accents
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try values.decodeIfPresent(UUID.self, forKey: .id) ?? UUID(),
+            name: try values.decodeIfPresent(String.self, forKey: .name) ?? "Section",
+            meter: try values.decodeIfPresent(MeterPattern.self, forKey: .meter) ?? MeterPattern(),
+            bpm: try values.decodeIfPresent(Int.self, forKey: .bpm) ?? 120,
+            bars: try values.decodeIfPresent(Int.self, forKey: .bars) ?? 1,
+            referenceNoteMultiplier: try values.decodeIfPresent(Double.self, forKey: .referenceNoteMultiplier) ?? 1.0,
+            rhythmMode: RhythmMode(rawValue: try values.decodeIfPresent(Int.self, forKey: .rhythmModeRawValue) ?? RhythmMode.all.rawValue) ?? .all,
+            tempoAutomation: try values.decodeIfPresent(TempoAutomation.self, forKey: .tempoAutomation) ?? TempoAutomation(),
+            accents: try values.decodeIfPresent([Bool].self, forKey: .accents)
+        )
     }
 }
 
